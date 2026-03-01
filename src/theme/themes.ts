@@ -4,6 +4,18 @@ import { deepmerge } from '@mui/utils';
 import { ThemeMode } from './types';
 
 const sharedTheme = {
+  palette: {
+    primary: {
+      main: '#2e7d32',
+      light: '#4caf50',
+      dark: '#1b5e20',
+    },
+    secondary: {
+      main: '#ff9800',
+      light: '#ffb74d',
+      dark: '#f57c00',
+    },
+  },
   components: {
     MuiButtonBase: {
       defaultProps: {
@@ -21,7 +33,6 @@ const sharedTheme = {
   },
 };
 
-// to explore all the options, check out https://mui.com/material-ui/customization/default-theme/
 const themes: Record<ThemeMode, ThemeOptions> = {
   light: deepmerge(sharedTheme, {
     palette: {

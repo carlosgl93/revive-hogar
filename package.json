@@ -15,6 +15,8 @@
   "license": "MIT",
   "scripts": {
     "dev": "vite",
+    "emulators": "firebase emulators:start --import=./emulator-data --export-on-exit=./emulator-data",
+    "emulators:fresh": "firebase emulators:start",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "https-preview": "serve dist",
@@ -24,18 +26,23 @@
     "ts:check": "tsc --noEmit",
     "test:unit": "vitest src",
     "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui"
+    "test:e2e:ui": "playwright test --ui",
+    "deploy": "node scripts/deploy.js"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.0",
     "@mui/icons-material": "^6.4.6",
     "@mui/material": "^6.4.6",
+    "@mui/utils": "^7.3.8",
     "@toolpad/core": "^0.12.1",
+    "date-fns": "^4.1.0",
+    "firebase": "^12.9.0",
     "jotai": "^2.12.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-error-boundary": "^5.0.0",
+    "react-firebase-hooks": "^5.1.1",
     "react-hotkeys-hook": "^4.6.1",
     "react-router": "^7.2.0",
     "usehooks-ts": "^3.1.1"
@@ -80,5 +87,10 @@
     "pwa",
     "starter-kit",
     "vite"
-  ]
+  ],
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  }
 }

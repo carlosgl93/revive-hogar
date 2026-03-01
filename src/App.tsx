@@ -1,25 +1,26 @@
 import { Fragment } from 'react';
-import { BrowserRouter } from 'react-router';
+import { BrowserRouter, Route, Routes } from 'react-router';
 
 import { CssBaseline } from '@mui/material';
 
 import { withErrorHandler } from '@/error-handling';
 import AppErrorBoundaryFallback from '@/error-handling/fallbacks/App';
+import asyncComponentLoader from '@/utils/loader';
 
-import Pages from './routes/Pages';
-import Header from './sections/Header';
-import HotKeys from './sections/HotKeys';
-import Sidebar from './sections/Sidebar';
+const LandingPage = asyncComponentLoader(() => import('@/pages/Landing'));
+const AdminRoutes = asyncComponentLoader(() => import('@/routes/AdminRoutes'));
+const NotFound = asyncComponentLoader(() => import('@/pages/NotFound'));
 
 function App() {
   return (
     <Fragment>
       <CssBaseline />
-      <HotKeys />
       <BrowserRouter>
-        <Header />
-        <Sidebar />
-        <Pages />
+        <Routes>
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/admin/*" element={<AdminRoutes />} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
       </BrowserRouter>
     </Fragment>
   );

@@ -1,8 +1,10 @@
 {
-  "name": "React PWA",
-  "short_name": "reactpwa",
-  "description": "Starter kit for modern web applications",
-  "theme_color": "#ffffff",
+  "name": "Revive Hogar",
+  "short_name": "ReviveHogar",
+  "description": "Reciclaje y retiro de residuos organicos a domicilio",
+  "theme_color": "#2e7d32",
+  "background_color": "#ffffff",
+  "start_url": "/",
   "icons": [
     {
       "src": "pwa-192x192.png",
