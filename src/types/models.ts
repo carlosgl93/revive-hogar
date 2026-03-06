@@ -1,13 +1,19 @@
 export enum PlanType {
   BASICO = 'basico',
-  MEDIO = 'medio',
-  PREMIUM = 'premium',
+  PRO_S = 'pro-s',
+  PRO_L = 'pro-l',
+  ORGANICO_S = 'organico-s',
+  ORGANICO_L = 'organico-l',
+  CURICO = 'curico',
 }
 
 export enum PaymentType {
   SUBSCRIPTION = 'Suscripcion',
-  TRANSFER = 'Particular',
-  CASH = 'Efectivo',
+  TRANSFER = 'Transferencia',
+  BOTON_DE_PAGO = 'Boton de pago',
+  SUSPENDIDA = 'Suspendida',
+  NA = 'NA',
+  RECUPERAR = 'Recuperar',
 }
 
 export type PaymentStatus = 'ok' | 'pendiente' | 'atrasado' | '';

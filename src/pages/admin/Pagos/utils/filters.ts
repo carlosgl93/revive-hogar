@@ -19,5 +19,9 @@ export function applyFilters(clients: Cliente[], filters: PagosFiltersState): Cl
     });
   }
 
+  if (filters.dia !== 'all') {
+    result = result.filter((c) => c.dia === filters.dia);
+  }
+
   return result;
 }

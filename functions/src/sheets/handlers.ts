@@ -3,6 +3,7 @@ import * as admin from 'firebase-admin';
 import { onRequest } from 'firebase-functions/v2/https';
 import { defineSecret, defineString } from 'firebase-functions/params';
 
+import { verifyFirebaseToken } from '../middleware';
 import { getSheetRows } from './client';
 import { buildHeaderIndex, transformRow } from './transform';
 
@@ -20,13 +21,8 @@ interface ImportResult {
   updated: number;
   skipped: number;
   errors: string[];
-}
-
-async function verifyFirebaseToken(authHeader: string | undefined): Promise<void> {
-  if (!authHeader?.startsWith('Bearer ')) {
-    throw new Error('Missing or invalid Authorization header');
-  }
-  await admin.auth().verifyIdToken(authHeader.split('Bearer ')[1]);
+  totalSheetRows: number;
+  emptyRows: number;
 }
 
 export const importFromSheets = onRequest(
@@ -41,7 +37,7 @@ export const importFromSheets = onRequest(
       }
 
       const db = admin.firestore();
-      const result: ImportResult = { created: 0, updated: 0, skipped: 0, errors: [] };
+      const result: ImportResult = { created: 0, updated: 0, skipped: 0, errors: [], totalSheetRows: 0, emptyRows: 0 };
 
       try {
         const rows = await getSheetRows(SHEETS_SPREADSHEET_ID.value(), SHEETS_SHEET_NAME.value());
@@ -53,6 +49,7 @@ export const importFromSheets = onRequest(
 
         const [headerRow, ...dataRows] = rows;
         const headerIndex = buildHeaderIndex(headerRow);
+        result.totalSheetRows = dataRows.length;
 
         for (let i = 0; i < dataRows.length; i++) {
           const { cliente, error } = transformRow(dataRows[i], headerIndex, i + 1);
@@ -64,15 +61,19 @@ export const importFromSheets = onRequest(
 
           if (!cliente) {
             result.skipped++;
+            result.emptyRows++;
+            console.log(`[import] Row ${i + 2} is empty, skipping`);
             continue;
           }
 
-          // Upsert by correo
-          const existing = await db
+          // Upsert by correo + direccion (allow same email with different address)
+          let existingQuery = db
             .collection('clientes')
             .where('correo', '==', cliente.correo)
-            .limit(1)
-            .get();
+            .where('direccion', '==', cliente.direccion)
+            .limit(1);
+
+          let existing = await existingQuery.get();
 
           if (!existing.empty) {
             await existing.docs[0].ref.set(cliente, { merge: true });
@@ -83,6 +84,7 @@ export const importFromSheets = onRequest(
           }
         }
 
+        console.log(`[import] Sheet rows: ${result.totalSheetRows}, created: ${result.created}, updated: ${result.updated}, skipped: ${result.skipped}, errors: ${result.errors.length}, empty: ${result.emptyRows}`);
         res.json(result);
       } catch (error) {
         console.error('ETL failed:', error);

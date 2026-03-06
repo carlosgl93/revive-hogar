@@ -14,8 +14,11 @@ function normalizeMonto(raw: string): number {
 function normalizeTipoPago(raw: string): PaymentType | string {
   const lower = raw.trim().toLowerCase();
   if (lower.includes('suscripcion') || lower.includes('suscripción')) return PaymentType.SUBSCRIPTION;
-  if (lower.includes('particular') || lower.includes('transferencia')) return PaymentType.TRANSFER;
-  if (lower.includes('efectivo')) return PaymentType.CASH;
+  if (lower.includes('transferencia') || lower.includes('particular')) return PaymentType.TRANSFER;
+  if (lower.includes('boton de pago') || lower.includes('botón de pago')) return PaymentType.BOTON_DE_PAGO;
+  if (lower === 'suspendida') return PaymentType.SUSPENDIDA;
+  if (lower === 'na' || lower === 'n/a') return PaymentType.NA;
+  if (lower === 'recuperar') return PaymentType.RECUPERAR;
   return raw.trim();
 }
 
@@ -24,6 +27,9 @@ function normalizePaymentStatus(raw: string): PaymentStatus {
   if (lower === 'ok' || lower === 'pagado' || lower === 'pagada') return 'ok';
   if (lower === 'pendiente') return 'pendiente';
   if (lower === 'atrasado' || lower === 'atrasada') return 'atrasado';
+  // If the cell contains a non-zero number (amount paid), treat as 'ok'
+  const num = parseFloat(raw.replace(/[$.\s]/g, '').replace(',', '.'));
+  if (!isNaN(num) && num > 0) return 'ok';
   return '';
 }
 

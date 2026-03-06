@@ -2,8 +2,11 @@ export type PaymentStatus = 'ok' | 'pendiente' | 'atrasado' | '';
 
 export enum PaymentType {
   SUBSCRIPTION = 'Suscripcion',
-  TRANSFER = 'Particular',
-  CASH = 'Efectivo',
+  TRANSFER = 'Transferencia',
+  BOTON_DE_PAGO = 'Boton de pago',
+  SUSPENDIDA = 'Suspendida',
+  NA = 'NA',
+  RECUPERAR = 'Recuperar',
 }
 
 export interface Cliente {
