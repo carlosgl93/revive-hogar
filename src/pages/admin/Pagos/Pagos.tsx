@@ -1,23 +1,34 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
 import AddIcon from '@mui/icons-material/Add';
-import { Alert, Box, Button, Container, Stack, Tab, Tabs, Typography } from '@mui/material';
+import SearchIcon from '@mui/icons-material/Search';
+import {
+  Alert,
+  Box,
+  Button,
+  Container,
+  InputAdornment,
+  Stack,
+  Tab,
+  Tabs,
+  TextField,
+  Typography,
+} from '@mui/material';
 
-import { paykuSubscriptionsApi } from '@/api';
 import { useClients } from '@/firebase/useClients';
 import { useUpdateClient } from '@/firebase/useUpdateClient';
+import { PaykuCustomer } from '@/types/payku';
 
-import CardRenewalDialog from './components/CardRenewalDialog';
 import ClientFormDialog from './components/ClientFormDialog';
 import ClientsTable from './components/ClientsTable';
-import ConfirmDialog from './components/ConfirmDialog';
 import CreateSubscriptionDialog from './components/CreateSubscriptionDialog';
+import CustomerDetailModal from './components/CustomerDetailModal';
+import CustomersTable from './components/CustomersTable';
 import Dashboard from './components/Dashboard';
 import PagosFilters from './components/PagosFilters';
-import SubscriptionFilters from './components/SubscriptionFilters';
-import SubscriptionsTable from './components/SubscriptionsTable';
 import { useClientCrud } from './hooks/useClientCrud';
 import { useFilters } from './hooks/useFilters';
+import { usePaykuCustomers } from './hooks/usePaykuCustomers';
 import { usePaykuSubscriptionsV3 } from './hooks/usePaykuSubscriptionsV3';
 import { applyFilters } from './utils/filters';
 import { calculateKPIs } from './utils/kpis';
@@ -26,36 +37,25 @@ function Pagos() {
   // Data hooks
   const { clients, loading: clientsLoading } = useClients();
   const { filters: clientFilters, setFilter: setClientFilter } = useFilters();
-  const {
-    subscriptions,
-    loading: subsLoading,
-    error: subsError,
-    filters: subFilters,
-    updateFilter: updateSubFilter,
-    updateStatusFilter,
-    refetch: refetchSubs,
-  } = usePaykuSubscriptionsV3();
+  const { subscriptions, loading: subsLoading, refetch: refetchSubs } = usePaykuSubscriptionsV3();
   const { createClient, loading: crudLoading } = useClientCrud();
   const { markAsPaid, loading: markPaidLoading } = useUpdateClient();
+  const {
+    customers,
+    loading: customersLoading,
+    loadingMore: customersLoadingMore,
+    error: customersError,
+    hasMore: customersHasMore,
+    setSearchEmail,
+    loadMore: loadMoreCustomers,
+  } = usePaykuCustomers();
 
   // UI state
   const [tab, setTab] = useState(0);
   const [createSubOpen, setCreateSubOpen] = useState(false);
   const [clientFormOpen, setClientFormOpen] = useState(false);
-  const [renewCard, setRenewCard] = useState<{
-    open: boolean;
-    subscriptionId: string;
-    clientName: string;
-  }>({
-    open: false,
-    subscriptionId: '',
-    clientName: '',
-  });
-  const [confirmDelete, setConfirmDelete] = useState<{ open: boolean; subscriptionId: string }>({
-    open: false,
-    subscriptionId: '',
-  });
-  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [customerDetail, setCustomerDetail] = useState<PaykuCustomer | null>(null);
+  const [emailInput, setEmailInput] = useState('');
 
   // Derived data
   const filteredClients = useMemo(
@@ -69,31 +69,21 @@ function Pagos() {
   );
 
   // Handlers
-  const handleRenewCard = (subscriptionId: string, clientName: string) => {
-    setRenewCard({ open: true, subscriptionId, clientName });
-  };
-
-  const handleDeleteSubscription = (subscriptionId: string) => {
-    setConfirmDelete({ open: true, subscriptionId });
-  };
-
-  const handleConfirmDelete = async () => {
-    setDeleteLoading(true);
-    try {
-      await paykuSubscriptionsApi.delete(confirmDelete.subscriptionId);
-      setConfirmDelete({ open: false, subscriptionId: '' });
-      refetchSubs();
-    } catch {
-      // Error is visible in console; could enhance with snackbar later
-    } finally {
-      setDeleteLoading(false);
-    }
-  };
-
   const handleCreateClient = async (data: Parameters<typeof createClient>[0]) => {
     await createClient(data);
     setClientFormOpen(false);
   };
+
+  const handleSearchCustomers = useCallback(() => {
+    setSearchEmail(emailInput.trim());
+  }, [emailInput, setSearchEmail]);
+
+  const handleSearchKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter') handleSearchCustomers();
+    },
+    [handleSearchCustomers],
+  );
 
   return (
     <Container maxWidth="lg" sx={{ py: 3 }}>
@@ -139,17 +129,49 @@ function Pagos() {
           </Stack>
         )}
 
-        {/* Suscripciones Tab */}
+        {/* Suscripciones / Clientes Payku Tab */}
         {tab === 1 && (
           <Stack spacing={2}>
-            <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
-              <SubscriptionFilters
-                filters={subFilters}
-                onDateChange={(key, value) => updateSubFilter(key, value)}
-                onStatusChange={updateStatusFilter}
-                onApply={refetchSubs}
-                loading={subsLoading}
-              />
+            <Stack direction="row" justifyContent="space-between" alignItems="center">
+              <Stack direction="row" spacing={1} alignItems="center">
+                <TextField
+                  size="small"
+                  placeholder="Buscar por email..."
+                  value={emailInput}
+                  onChange={(e) => setEmailInput(e.target.value)}
+                  onKeyDown={handleSearchKeyDown}
+                  slotProps={{
+                    input: {
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <SearchIcon fontSize="small" />
+                        </InputAdornment>
+                      ),
+                    },
+                  }}
+                  sx={{ minWidth: 300 }}
+                />
+                <Button
+                  variant="contained"
+                  onClick={handleSearchCustomers}
+                  disabled={customersLoading}
+                  size="medium"
+                >
+                  Buscar
+                </Button>
+                {emailInput && (
+                  <Button
+                    variant="text"
+                    size="small"
+                    onClick={() => {
+                      setEmailInput('');
+                      setSearchEmail('');
+                    }}
+                  >
+                    Limpiar
+                  </Button>
+                )}
+              </Stack>
               <Button
                 variant="contained"
                 startIcon={<AddIcon />}
@@ -159,15 +181,27 @@ function Pagos() {
                 Nueva Suscripcion
               </Button>
             </Stack>
-            {subsError && (
-              <Alert severity="error">Error al cargar suscripciones: {subsError.message}</Alert>
+            {customersError && (
+              <Alert severity="error">
+                Error al cargar clientes Payku: {customersError.message}
+              </Alert>
             )}
-            <SubscriptionsTable
-              subscriptions={subscriptions}
-              loading={subsLoading}
-              onRenewCard={handleRenewCard}
-              onDelete={handleDeleteSubscription}
+            <CustomersTable
+              customers={customers}
+              loading={customersLoading}
+              onViewDetail={setCustomerDetail}
             />
+            {customersHasMore && !customersLoading && (
+              <Box sx={{ textAlign: 'center' }}>
+                <Button
+                  variant="outlined"
+                  onClick={loadMoreCustomers}
+                  disabled={customersLoadingMore}
+                >
+                  {customersLoadingMore ? 'Cargando...' : 'Cargar mas clientes'}
+                </Button>
+              </Box>
+            )}
           </Stack>
         )}
       </Stack>
@@ -185,19 +219,10 @@ function Pagos() {
         onSubmit={handleCreateClient}
         loading={crudLoading}
       />
-      <CardRenewalDialog
-        open={renewCard.open}
-        onClose={() => setRenewCard({ open: false, subscriptionId: '', clientName: '' })}
-        subscriptionId={renewCard.subscriptionId}
-        clientName={renewCard.clientName}
-      />
-      <ConfirmDialog
-        open={confirmDelete.open}
-        title="Eliminar Suscripcion"
-        message={`¿Estas seguro de eliminar la suscripcion ${confirmDelete.subscriptionId}? Esta accion no se puede deshacer.`}
-        onConfirm={handleConfirmDelete}
-        onCancel={() => setConfirmDelete({ open: false, subscriptionId: '' })}
-        loading={deleteLoading}
+      <CustomerDetailModal
+        customer={customerDetail}
+        open={!!customerDetail}
+        onClose={() => setCustomerDetail(null)}
       />
     </Container>
   );

@@ -297,6 +297,7 @@ function SubscriptionsTable({
       sx={{
         '& .MuiDataGrid-cell': { py: 0.5 },
       }}
+      getRowId={(row) => row.id}
     />
   );
 }

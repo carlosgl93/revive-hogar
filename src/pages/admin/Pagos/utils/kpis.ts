@@ -24,8 +24,8 @@ export function getCurrentMonthKey(): string {
   return `${MONTH_NAMES[now.getMonth()]} ${now.getFullYear()}`;
 }
 
-/** Payment types that generate income */
-const PAYING_TYPES = ['Suscripcion', 'Transferencia', 'Boton de pago'];
+/** Payment types that generate income (includes 'Particular' as legacy alias for Transferencia) */
+const PAYING_TYPES = ['Suscripcion', 'Transferencia', 'Particular', 'Boton de pago'];
 
 export interface DashboardKPIs {
   totalSubscriptions: number;
@@ -111,7 +111,7 @@ export function calculateKPIs(
         clientsDeudor++;
       }
     } else {
-      // Transferencia / Boton de pago: use pagos map for current month
+      // Transferencia / Particular / Boton de pago: use pagos map for current month
       if (c.pagos?.[monthKey] === 'ok') {
         clientsAlDia++;
       } else {

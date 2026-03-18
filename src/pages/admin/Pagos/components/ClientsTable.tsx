@@ -37,7 +37,7 @@ function formatPaymentType(tipo: string) {
   }
 }
 
-const MARK_PAID_TYPES: string[] = [PaymentType.TRANSFER, PaymentType.BOTON_DE_PAGO];
+const MARK_PAID_TYPES: string[] = [PaymentType.TRANSFER, 'Particular', PaymentType.BOTON_DE_PAGO];
 
 function ClientsTable({ clients, loading, onMarkPaid, markPaidLoading }: ClientsTableProps) {
   const monthKey = getCurrentMonthKey();

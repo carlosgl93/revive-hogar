@@ -1,3 +1,5 @@
+import { PaykuCustomer, PaykuCustomersResponse } from '@/types/payku';
+
 import api from './axiosInstance';
 
 export interface ListPaykuClientsParams {
@@ -21,7 +23,15 @@ export interface CreatePaykuClientData {
 export const paykuClientsApi = {
   list: (params?: ListPaykuClientsParams) => api.get('/listPaykuClients', { params }),
 
-  get: (identifier: string) => api.get('/getPaykuClient', { params: { identifier } }),
+  /** List customers with embedded subscriptions + transactions (paginated) */
+  listCustomers: (params?: ListPaykuClientsParams) =>
+    api.get<PaykuCustomersResponse>('/listPaykuClients', { params }),
+
+  /** Search a single customer by email — returns the full customer with subscriptions */
+  searchByEmail: (email: string) =>
+    api.get<PaykuCustomer>('/getPaykuClient', { params: { id: email } }),
+
+  get: (identifier: string) => api.get('/getPaykuClient', { params: { id: identifier } }),
 
   create: (data: CreatePaykuClientData) => api.post('/createPaykuClientFn', data),
 

@@ -33,3 +33,4 @@ emulator-data/
 functions/lib/
 functions/node_modules/
 .firebase/
+dist/

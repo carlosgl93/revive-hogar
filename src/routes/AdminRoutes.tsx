@@ -7,6 +7,7 @@ import asyncComponentLoader from '@/utils/loader';
 const LoginPage = asyncComponentLoader(() => import('@/pages/admin/Login'));
 const PagosPage = asyncComponentLoader(() => import('@/pages/admin/Pagos'));
 const ImportarPage = asyncComponentLoader(() => import('@/pages/admin/Importar'));
+const HistorialPagosPage = asyncComponentLoader(() => import('@/pages/admin/HistorialPagos'));
 const NotFound = asyncComponentLoader(() => import('@/pages/NotFound'));
 
 function AdminRoutes() {
@@ -17,6 +18,7 @@ function AdminRoutes() {
         <Route element={<AdminLayout />}>
           <Route index element={<Navigate to="pagos" replace />} />
           <Route path="pagos" element={<PagosPage />} />
+          <Route path="historial" element={<HistorialPagosPage />} />
           <Route path="importar" element={<ImportarPage />} />
         </Route>
       </Route>

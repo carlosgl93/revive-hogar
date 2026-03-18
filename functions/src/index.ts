@@ -11,6 +11,7 @@ export {
     getPaykuSubscription,
     deletePaykuSubscription,
     affiliatePaykuCard,
+    syncHistoricPayments,
 } from './payku/handlers';
 
 export {
