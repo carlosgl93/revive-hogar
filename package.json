@@ -28,7 +28,7 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "deploy": "node scripts/deploy.js",
-    "seed:auth": "tsx scripts/seed-auth.ts",
+    "seed:auth": "sh scripts/seed-auth.sh",
     "setup": "bash scripts/setup-conductor.sh"
   },
   "dependencies": {
