@@ -27,7 +27,9 @@
     "test:unit": "vitest src",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "deploy": "node scripts/deploy.js"
+    "deploy": "node scripts/deploy.js",
+    "seed:auth": "tsx scripts/seed-auth.ts",
+    "setup": "bash scripts/setup-conductor.sh"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
