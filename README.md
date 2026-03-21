@@ -1,243 +1,211 @@
-# React-PWA v3 🚀🎉⚡️
+# Revive Hogar — Admin Platform
 
-[![Analyses](https://github.com/suren-atoyan/react-pwa/actions/workflows/analyses.yml/badge.svg)](https://github.com/suren-atoyan/react-pwa/actions/workflows/analyses.yml)
-[![E2E Tests](https://github.com/suren-atoyan/react-pwa/actions/workflows/tests:e2e.yml/badge.svg)](https://github.com/suren-atoyan/react-pwa/actions/workflows/tests:e2e.yml)
+Management platform for a Chilean residential waste recycling and composting service. Handles customer subscriptions, payment tracking, route management, and reconciliation between local records and the Payku payment gateway.
 
-<a href="http://react-pwa.surenatoyan.com/" target="_blank" rel="noreferrer">
- <img src="./public/cover.png" title="React-PWA Starter Kit" alt="React-PWA cover image">
-</a>
+---
 
-## 🌟 Overview
+## What This Does
 
-**React-PWA** is an opinionated starter kit for building Progressive Web Applications with React. Designed to streamline development, it combines essential libraries, components, utilities, and developer tools to accelerate your workflow.
+Admins can answer three core questions about any customer:
 
-## 💡 Motivation
+- **Who has paid?** — Dashboard shows clients `al día` vs `deudor` per month
+- **How much have they paid?** — Historic payment view aggregates all transactions by customer
+- **Are they up to date?** — Each client has a `pagos` map keyed by month (`"marzo 2026": "ok" | "pendiente" | "atrasado"`)
 
-Building a modern web application requires a robust setup, including routing, UI components, theming, error handling, a structured file system, testing tools, and performance optimizations. **React-PWA** provides a production-ready, minimal, and efficient environment for developers to focus on creating great applications.
+---
 
-## ✨ Tech Stack & Features
+## Tech Stack
 
-### Core Technologies
-| Technology | Version | Description |
-|------------|---------|-------------|
-| [Vite](https://vitejs.dev/) | v6 | Fast build tool based on ES modules, Rollup, and esbuild |
-| [React](https://react.dev/) | v19 | Latest version with all modern features |
-| [TypeScript](https://www.typescriptlang.org/) | Latest | Type-safe JavaScript for better development |
-| [MUI](https://mui.com/) | v6 | Comprehensive UI framework with MUI |
+| Layer | Technology |
+|---|---|
+| Frontend | React 19 + Vite + MUI + Jotai |
+| Backend | Firebase Cloud Functions (Node 20) |
+| Database | Firestore |
+| Auth | Firebase Authentication |
+| Payments | Payku (Chilean gateway) |
+| Data Import | Google Sheets API |
+| Hosting | Firebase Hosting |
 
-### Key Features
-- **Routing**: [React Router v7](https://reactrouter.com/) for flexible client-side routing
-- **State Management**: [Jotai](https://jotai.org/) for simple, efficient state handling
-- **Theming**: Customizable dark/light mode with MUI [theme system](https://mui.com/material-ui/customization/theming/)
-- **Notifications**: Alert system with MUI Toolpad integration
-- **PWA Support**: Works offline and installs on any device
-- **Hotkeys**: Built-in keyboard shortcuts for common actions
-- **Error Handling**: Graceful error boundaries with custom fallbacks
-- **Performance**: All green Lighthouse scores with optimized bundle size
+---
 
-### Developer Tools
-- **Testing**: Vitest for unit tests, Playwright for e2e tests
-- **CI/CD**: GitHub Actions workflows for quality checks and testing
-- **Code Quality**: ESLint, Prettier, TypeScript integration
-- **Git Hooks**: Husky with lint-staged for pre-commit quality enforcement
-- **Local HTTPS**: Built-in support for local HTTPS development
+## Admin Routes
 
-## 🚀 Getting Started
+| Route | Purpose |
+|---|---|
+| `/admin/login` | Email/password login |
+| `/admin/pagos` | Main dashboard: KPIs, clients, subscriptions, Payku customers |
+| `/admin/historial` | Historic payment reconciliation |
+| `/admin/importar` | One-click Google Sheets import |
 
-### Quick Start
+---
+
+## Data Model
+
+### `clientes` (Firestore)
+
+Core customer database. Source of truth for local payment tracking.
+
+```
+nombre, correo, telefono, movil, direccion, comuna, dia
+monto             — monthly billing amount (CLP)
+tipoPago          — Suscripcion | Transferencia | Boton de pago | Suspendida | NA | Recuperar
+activo            — boolean
+plan              — basico | pro-s | pro-l | organico-s | organico-l | curico
+paykuSubscriptionId  — link to external Payku subscription
+fechaCorte        — next billing date
+pagos: {
+  "enero 2026": "ok" | "pendiente" | "atrasado" | ""
+  "febrero 2026": ...
+}
+```
+
+### `userHistoricPayments` (Firestore)
+
+Synced from Payku. Keyed by SHA256 hash of normalized address.
+
+```
+email, fullName, phone, direccion
+totalPayments, lastPaymentDate, syncedYears[]
+payments: {
+  [orderId]: { amount, createdAt, type, subscriptionId, depositDate }
+}
+manuallySettled, settledAt, settledBy
+```
+
+### `webhookLogs` (Firestore)
+
+Audit trail for incoming Payku webhook events.
+
+---
+
+## Subscription Plans
+
+| Plan | ID | Price |
+|---|---|---|
+| Básico | `pl416c17c4ba001aeca188` | $12,000/mo |
+| Pro S | `pl7c9a9495620a5d6d6491` | $21,000/mo |
+| Pro L | `pl32ce962c8dfb5dd62b00` | $25,000/mo |
+| Orgánico S | `pl31af7be2ee28fdbb7790` | $15,000/mo |
+| Orgánico L | `plea1ba75a0910bccfff97` | $20,000/mo |
+| Curicó | `pl16131e9f0254cca9c6da` | $12,000/mo |
+
+---
+
+## Payment Flow
+
+```
+New customer
+  → Admin creates Payku client + subscription
+  → Payku returns card registration URL
+  → Customer registers card
+  → Payku fires webhookSubscriptionActivation → cliente.activo = true
+  → Each month: Payku fires webhookPaymentCharge → pagos["mes año"] = "ok" | "atrasado"
+
+Manual transfer customers
+  → Admin marks month as paid manually in Clientes tab
+  → pagos["mes año"] = "ok"
+
+Historic sync
+  → Admin clicks "Sync" in Historial tab for a given year
+  → Cloud Function fetches all transactions from Payku for that year
+  → Stored in userHistoricPayments collection
+```
+
+---
+
+## Cloud Functions
+
+All functions require Firebase ID token (except webhooks).
+
+| Function | Method | Description |
+|---|---|---|
+| `listPaykuSubscriptionsV3` | GET | Filtered list (date, status, pagination) |
+| `createPaykuSubscription` | POST | Link client to plan |
+| `deletePaykuSubscription` | DELETE | Cancel subscription |
+| `affiliatePaykuCard` | POST | Register new card for renewal |
+| `listPaykuClients` | GET | Paginated Payku customer list |
+| `getPaykuClient` | GET | Search by email or ID |
+| `syncHistoricPayments` | POST | Sync a year's transactions from Payku |
+| `importFromSheets` | POST | ETL: Google Sheets → Firestore |
+| `webhookSubscriptionActivation` | POST | Public — Payku callback |
+| `webhookPaymentCharge` | POST | Public — Payku callback |
+
+---
+
+## Environment Variables
+
+### Frontend (`.env`)
+
+```env
+VITE_ENV=dev
+VITE_FIREBASE_API_KEY=
+VITE_FIREBASE_AUTH_DOMAIN=
+VITE_FIREBASE_PROJECT_ID=
+VITE_FIREBASE_STORAGE_BUCKET=
+VITE_FIREBASE_MESSAGING_SENDER_ID=
+VITE_FIREBASE_APP_ID=
+VITE_FIREBASE_MEASUREMENT_ID=
+VITE_FIREBASE_FUNCTIONS_URL=http://127.0.0.1:5001/revive-hogar/us-central1
+```
+
+### Cloud Functions (`functions/.env`)
+
+```env
+SHEETS_SHEET_NAME=Total consolidado
+```
+
+Secrets (via Firebase Secrets Manager):
+- `PAYKU_PUBLIC_TOKEN`
+- `PAYKU_PRIVATE_TOKEN`
+- `SHEETS_SPREADSHEET_ID`
+
+---
+
+## Local Development
 
 ```bash
-# Clone the repository
-git clone https://github.com/suren-atoyan/react-pwa.git
-
 # Install dependencies
-npm install
+pnpm install
+cd functions && npm install && cd ..
 
-# Start development server
-npm run dev
+# Start emulators (with saved data)
+pnpm run emulators
 
-# Build for production
-npm run build
+# Start frontend dev server
+pnpm run dev
+
+# Fresh emulators (no data)
+pnpm run emulators:fresh
 ```
 
-### Available Scripts
+---
 
-| Command | Description |
-|---------|-------------|
-| `npm run dev` | Start development server |
-| `npm run build` | Build for production |
-| `npm run prettier:check` | Check formatting |
-| `npm run lint:check` | Check linting |
-| `npm run ts:check` | Check TypeScript |
-| `npm run test:unit` | Run unit tests |
-| `npm run test:e2e` | Run e2e tests |
-| `npm run test:e2e:ui` | Run e2e tests in UI mode |
-| `npm run preview` | Preview production build locally |
-| `npm run https-preview` | Preview with HTTPS |
+## Deploy
 
-## 📁 Project Structure
-
-```
-react-pwa/
-├── ...
-├── src/
-│   ├── components/     # Reusable UI components
-│   ├── config/         # Application configuration
-│   ├── error-handling/ # Error management
-│   ├── hooks/          # Custom hooks
-│   ├── pages/          # Application pages/routes
-│   ├── routes/         # Routing configuration
-│   ├── sections/       # Self-contained application sections
-│   ├── theme/          # Theme configuration
-│   └── utils/          # Utility functions
-└── ...
-```
-
-### Component Organization
-
-Each component follows this structure:
-```
-ComponentName/
-├── index.ts          # Default exports the component
-├── ComponentName.tsx # Pure component implementation
-├── types.ts          # Component-related types (optional)
-├── styled.ts         # Styled components (optional)
-└── utils.ts          # Component-specific utilities (optional)
-```
-
-## 🔍 Key Features Explained
-
-### UI Framework
-MUI ensures consistency, accessibility, and performance while remaining highly customizable to match your brand's design language.
-
-```jsx
-import Box from '@mui/material/Box';
-import Button from '@mui/material/Button';
-import { styled } from '@mui/material/styles';
-
-// styled components
-const NewButton = styled(Button)(({ theme }) => ({
-  marginRight: theme.spacing(1),
-  color: theme.palette.text.disabled,
-}));
-
-// sx prop
-function MyComponent() {
-  return <Box sx={{ borderRadius: theme.shape.borderRadius }}>...</Box>;
-}
-```
-
-### 🎨 Theming
-The theme system is based on MUI Theme, supporting dark/light modes and customization.
-
-```jsx
-import { useThemeMode } from '@/theme';
-
-function MyComponent() {
-  const { themeMode, toggle } = useThemeMode();
-  
-  return <Button onClick={toggle}>Toggle Theme</Button>;
-}
-```
-
-### State Management
-Jotai provides simple atoms-based state management for cross-application state, complementing React's useState and data fetching libraries.
-
-### Notifications
-Utilizes MUI Toolpad’s `useNotification` for handling alerts in an elegant, customizable way:
-
-```jsx
-function MyComponent() {
-  const notifications = useNotifications();
-
-  function showNotification() {
-    notifications.show('Operation successful!', {
-      autoHideDuration: 5000,
-    });
-  }
-}
-```
-
-### 🔑 Hotkeys
-- `Alt+s`: Toggle theme mode
-- `Alt+t`: Toggle sidebar
-- `Alt+/`: Open hotkeys dialog
-
-### PWA Features
-- Works offline with service worker caching
-- Installable on mobile and desktop devices
-- Automatic updates (configurable in `vite.config.ts`)
-
-### 📱 Performance
-- Bundle size: ~65KB for largest chunk
-- Initial load: ~0.6s
-- Cached loads: ~0.01s
-
-<img src="./public/bundle.png" title="bundle">
-<img src="./public/audit.png" alt="Performance audit" title="Performance audit">
-
-### Error Handling
-The `withErrorHandler` HOC catches errors and displays friendly fallback UIs:
-
-```jsx
-// In your component:
-export default withErrorHandler(MyComponent);
-
-// Or for the entire app:
-export default withErrorHandler(App);
-```
-
-## 🧪 Testing
-
-### Unit Tests
 ```bash
-npm run test:unit
+# Full deploy (hosting + functions + rules)
+node scripts/deploy.js
+
+# Functions only
+cd functions && npm run deploy
 ```
 
-### E2E Tests
-```bash
-npm run test:e2e
-# or with UI
-npm run test:e2e:ui
+The deploy script swaps `VITE_ENV=production` and the production functions URL, builds, deploys, then restores the dev `.env`.
+
+---
+
+## Google Sheets Import Format
+
+The sheet must have a header row with these columns (case-insensitive):
+
+```
+nombre | correo | telefono | movil | direccion | comuna | dia | monto | tipo de pago | enero 2025 | febrero 2025 | ...
 ```
 
-## 🌐 Environment Variables
+Month columns are auto-detected by regex. Cell values map to:
+- `ok` / any amount > 0 → `"ok"`
+- `atrasado` → `"atrasado"`
+- `pendiente` → `"pendiente"`
+- empty → `""`
 
-Place your environment variables in a `.env` file (prefixed with `VITE_`):
-- Templates available in the `env/` directory
-- Access via `import.meta.env.VITE_VARIABLE_NAME`
-
-## ❓ FAQ
-
-### Why use a UI library?
-A UI library ensures consistency, accessibility, and development efficiency. Without one, teams would need to create and maintain basic components from scratch, leading to inconsistencies and wasted time.
-
-### Why Jotai for state management?
-React applications have different state management needs:
-- **Component-level state**: `useState` for local UI interactions
-- **Data-layer state**: `useQuery` or `Apollo` for remote data
-- **Cross-application state**: Jotai provides a minimal, elegant approach
-
-### What's the difference between components, sections, and pages?
-- **Components**: Reusable UI elements (`Button`, `List`, etc.)
-- **Sections**: Self-contained UI parts with their own logic (`Navigation`, `Sidebar`, etc.)
-- **Pages**: Root route components representing application views
-
-### Why TypeScript?
-TypeScript reduces runtime errors, improves code maintainability, and enhances developer experience with static typing and better IDE support.
-
-### Why use Prettier?
-Prettier enforces consistent style across all contributors, reducing discussions in PR reviews and ensuring code quality.
-
-## 🔗 Demo
-
-Check out the [live demo](https://react-pwa.surenatoyan.com/)
-
-<div>
- <img src="./public/demo-dark.png" width="280" alt="Dark theme demo"> 
- <img src="./public/demo-light.png" width="280" alt="Light theme demo">
-</div>
-
-## 📄 License
-
-[MIT](./LICENSE)
+Upsert key: `(correo + direccion)` combination.

@@ -1,14 +1,14 @@
 import EnergySavingsLeafIcon from '@mui/icons-material/EnergySavingsLeaf';
 import LocalShippingIcon from '@mui/icons-material/LocalShipping';
-import ScheduleIcon from '@mui/icons-material/Schedule';
+import RecyclingIcon from '@mui/icons-material/Recycling';
 import { Box, Card, CardContent, Container, Grid2, Stack, Typography } from '@mui/material';
 
 const services = [
   {
-    icon: <ScheduleIcon sx={{ fontSize: 48, color: 'primary.main' }} />,
-    title: 'Agenda tu dia',
+    icon: <RecyclingIcon sx={{ fontSize: 48, color: 'primary.main' }} />,
+    title: 'Separa',
     description:
-      'Elige el dia de la semana que prefieras para el retiro. Nosotros pasamos por tu hogar.',
+      'Usa el kit que te entregaremos para separar los residuos por papel / carton, latas, vidrio y/o organicos.',
   },
   {
     icon: <LocalShippingIcon sx={{ fontSize: 48, color: 'primary.main' }} />,
