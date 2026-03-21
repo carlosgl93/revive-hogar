@@ -5,67 +5,86 @@ on:
     branches: [main, master]
   pull_request:
     branches: [main, master]
+
 jobs:
   install:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install Dependencies
-        run: npm ci
-      - name: Cache node modules
-        uses: actions/cache@v4
+      - uses: pnpm/action-setup@v4
         with:
-          path: node_modules
-          key: ${{ github.sha }}
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
   lint:
     needs: install
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Cached node modules
-        uses: actions/cache@v4
+      - uses: pnpm/action-setup@v4
         with:
-          path: node_modules
-          key: ${{ github.sha }}
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
       - name: Eslint
-        run: npm run lint:check
+        run: pnpm run lint:check
 
   prettier:
     needs: install
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Cached node modules
-        uses: actions/cache@v4
+      - uses: pnpm/action-setup@v4
         with:
-          path: node_modules
-          key: ${{ github.sha }}
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
       - name: Prettier
-        run: npm run prettier:check
+        run: pnpm run prettier:check
 
   typescript:
     needs: install
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Cached node modules
-        uses: actions/cache@v4
+      - uses: pnpm/action-setup@v4
         with:
-          path: node_modules
-          key: ${{ github.sha }}
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
       - name: Typescript
-        run: npm run ts:check
+        run: pnpm run ts:check
 
   unit_tests:
     needs: install
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Cached node modules
-        uses: actions/cache@v4
+      - uses: pnpm/action-setup@v4
         with:
-          path: node_modules
-          key: ${{ github.sha }}
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
       - name: Unit tests
-        run: npm run test:unit
+        run: pnpm run test:unit
