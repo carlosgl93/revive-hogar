@@ -11,7 +11,8 @@ const loader = {
 
 const defaultMetaTags = {
   image: '/cover.png',
-  description: 'Reciclaje y retiro de residuos organicos a domicilio en Santiago',
+  description:
+    'Reciclaje y retiro de residuos organicos a domicilio en Rancagua y comunas cercanas',
 };
 
 export { loader, dateFormat, email, title, defaultMetaTags };

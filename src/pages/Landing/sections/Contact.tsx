@@ -60,10 +60,10 @@ function Contact() {
             <Stack spacing={2} alignItems="center" textAlign="center">
               <LocationOnIcon sx={{ fontSize: 48, color: 'primary.main' }} />
               <Typography variant="h6" fontWeight={600}>
-                Santiago
+                Rancagua
               </Typography>
               <Typography variant="body1" color="text.secondary">
-                Region Metropolitana, Chile
+                Region de O'Higgins, Chile
               </Typography>
             </Stack>
           </Grid2>

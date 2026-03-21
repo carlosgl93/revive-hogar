@@ -17,8 +17,10 @@ import {
 
 import { useClients } from '@/firebase/useClients';
 import { useUpdateClient } from '@/firebase/useUpdateClient';
+import { Cliente } from '@/types/models';
 import { PaykuCustomer } from '@/types/payku';
 
+import CustomerPaymentsModal from '../HistorialPagos/components/CustomerPaymentsModal';
 import ClientFormDialog from './components/ClientFormDialog';
 import ClientsTable from './components/ClientsTable';
 import CreateSubscriptionDialog from './components/CreateSubscriptionDialog';
@@ -27,6 +29,7 @@ import CustomersTable from './components/CustomersTable';
 import Dashboard from './components/Dashboard';
 import PagosFilters from './components/PagosFilters';
 import { useClientCrud } from './hooks/useClientCrud';
+import { useClientHistory } from './hooks/useClientHistory';
 import { useFilters } from './hooks/useFilters';
 import { usePaykuCustomers } from './hooks/usePaykuCustomers';
 import { usePaykuSubscriptionsV3 } from './hooks/usePaykuSubscriptionsV3';
@@ -49,6 +52,7 @@ function Pagos() {
     setSearchEmail,
     loadMore: loadMoreCustomers,
   } = usePaykuCustomers();
+  const { historyData, lookupHistory, clearHistory } = useClientHistory();
 
   // UI state
   const [tab, setTab] = useState(0);
@@ -73,6 +77,13 @@ function Pagos() {
     await createClient(data);
     setClientFormOpen(false);
   };
+
+  const handleViewHistory = useCallback(
+    async (client: Cliente) => {
+      await lookupHistory(client);
+    },
+    [lookupHistory],
+  );
 
   const handleSearchCustomers = useCallback(() => {
     setSearchEmail(emailInput.trim());
@@ -125,6 +136,7 @@ function Pagos() {
               loading={clientsLoading}
               onMarkPaid={markAsPaid}
               markPaidLoading={markPaidLoading}
+              onViewHistory={handleViewHistory}
             />
           </Stack>
         )}
@@ -223,6 +235,12 @@ function Pagos() {
         customer={customerDetail}
         open={!!customerDetail}
         onClose={() => setCustomerDetail(null)}
+      />
+      <CustomerPaymentsModal
+        customer={historyData}
+        open={!!historyData}
+        onClose={clearHistory}
+        onToggleSettled={() => {}}
       />
     </Container>
   );

@@ -19,6 +19,9 @@ import {
 
 import { plans } from '@/config/plans';
 
+const DISPLAYED_PLAN_IDS = ['basico', 'pro-s', 'pro-l'];
+const visiblePlans = plans.filter((p) => DISPLAYED_PLAN_IDS.includes(p.id));
+
 function Plans() {
   return (
     <Box id="planes" sx={{ py: { xs: 6, md: 10 } }}>
@@ -39,7 +42,7 @@ function Plans() {
         </Stack>
 
         <Grid2 container spacing={4} justifyContent="center">
-          {plans.map((plan) => (
+          {visiblePlans.map((plan) => (
             <Grid2 key={plan.id} size={{ xs: 12, sm: 6, md: 4 }}>
               <Card
                 sx={{
@@ -49,6 +52,7 @@ function Plans() {
                   border: plan.highlighted ? '2px solid' : '1px solid',
                   borderColor: plan.highlighted ? 'primary.main' : 'divider',
                   position: 'relative',
+                  overflow: 'visible',
                 }}
                 elevation={plan.highlighted ? 8 : 1}
               >

@@ -54,11 +54,28 @@ export const webhookSubscriptionActivation = onRequest(async (req, res) => {
 
   try {
     // Find client by paykuSubscriptionId
-    const snapshot = await db
+    let snapshot = await db
       .collection('clientes')
       .where('paykuSubscriptionId', '==', id)
       .limit(1)
       .get();
+
+    // Fallback: try matching by email from the Payku client field
+    if (snapshot.empty && req.body.client) {
+      const clientEmail = typeof req.body.client === 'string' ? req.body.client : req.body.client.email;
+      if (clientEmail) {
+        snapshot = await db
+          .collection('clientes')
+          .where('correo', '==', clientEmail)
+          .limit(1)
+          .get();
+
+        // Auto-link the subscription ID so future lookups are direct
+        if (!snapshot.empty) {
+          await snapshot.docs[0].ref.update({ paykuSubscriptionId: id });
+        }
+      }
+    }
 
     if (!snapshot.empty) {
       const clientDoc = snapshot.docs[0];
@@ -71,6 +88,10 @@ export const webhookSubscriptionActivation = onRequest(async (req, res) => {
     await db.collection('webhookLogs').add({
       type: 'subscription_activation',
       subscriptionId: id,
+      clientId: !snapshot.empty ? snapshot.docs[0].id : null,
+      matchedBy: !snapshot.empty
+        ? (snapshot.docs[0].data().paykuSubscriptionId === id ? 'subscriptionId' : 'email')
+        : 'none',
       status,
       receivedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
@@ -103,12 +124,48 @@ export const webhookPaymentCharge = onRequest(async (req, res) => {
   const monthKey = getSpanishMonthKey(now);
 
   try {
+    // Deduplicate: check if this transaction was already processed
+    const existingLog = await db
+      .collection('webhookLogs')
+      .where('transactionId', '==', payload.transaction_id)
+      .where('type', '==', 'payment_charge')
+      .limit(1)
+      .get();
+
+    if (!existingLog.empty) {
+      res.status(200).json({ received: true, deduplicated: true });
+      return;
+    }
+
     // Find client by paykuSubscriptionId
-    const snapshot = await db
+    let snapshot = await db
       .collection('clientes')
       .where('paykuSubscriptionId', '==', payload.subscriptions.id)
       .limit(1)
       .get();
+
+    // Fallback: try matching by Payku client email
+    if (snapshot.empty && payload.subscriptions.client) {
+      // payload.subscriptions.client could be a Payku client ID or email
+      const clientIdentifier = payload.subscriptions.client;
+      // Try as email first (contains @)
+      if (clientIdentifier.includes('@')) {
+        snapshot = await db
+          .collection('clientes')
+          .where('correo', '==', clientIdentifier)
+          .limit(1)
+          .get();
+      }
+
+      // Auto-link the subscription ID so future lookups are direct
+      if (!snapshot.empty) {
+        await snapshot.docs[0].ref.update({ paykuSubscriptionId: payload.subscriptions.id });
+      }
+    }
+
+    const matchedBy = !snapshot.empty
+      ? (snapshot.docs[0].data().paykuSubscriptionId === payload.subscriptions.id ? 'subscriptionId' : 'email')
+      : 'none';
 
     if (!snapshot.empty) {
       const clientDoc = snapshot.docs[0];
@@ -136,6 +193,7 @@ export const webhookPaymentCharge = onRequest(async (req, res) => {
       transactionId: payload.transaction_id,
       status: payload.status,
       order: payload.order,
+      matchedBy,
       receivedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 

@@ -28,8 +28,8 @@ function ClientFormDialog({ open, onClose, onSubmit, loading }: ClientFormDialog
     phone: '',
     address: '',
     country: 'Chile',
-    region: 'Metropolitana',
-    city: 'Santiago',
+    region: "O'Higgins",
+    city: 'Rancagua',
     postal_code: '',
   });
 

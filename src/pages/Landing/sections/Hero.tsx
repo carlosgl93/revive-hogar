@@ -14,7 +14,7 @@ function Hero() {
         <Stack direction={{ xs: 'column', md: 'row' }} alignItems="center" spacing={4}>
           <Stack spacing={3} flex={1}>
             <Typography variant="h2" fontWeight={800} sx={{ fontSize: { xs: '2rem', md: '3rem' } }}>
-              Reciclaje a domicilio en Santiago
+              Reciclaje a domicilio en Rancagua
             </Typography>
             <Typography variant="h6" sx={{ opacity: 0.9, fontWeight: 400 }}>
               Retiramos tu reciclaje y residuos organicos directamente en tu hogar. Simple, comodo y

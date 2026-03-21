@@ -1,4 +1,5 @@
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
+import HistoryIcon from '@mui/icons-material/History';
 import WhatsAppIcon from '@mui/icons-material/WhatsApp';
 import { Chip, CircularProgress, IconButton, Tooltip } from '@mui/material';
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
@@ -14,6 +15,7 @@ interface ClientsTableProps {
   loading: boolean;
   onMarkPaid?: (clientId: string) => void;
   markPaidLoading?: boolean;
+  onViewHistory?: (client: Cliente) => void;
 }
 
 function formatPaymentType(tipo: string) {
@@ -39,7 +41,13 @@ function formatPaymentType(tipo: string) {
 
 const MARK_PAID_TYPES: string[] = [PaymentType.TRANSFER, 'Particular', PaymentType.BOTON_DE_PAGO];
 
-function ClientsTable({ clients, loading, onMarkPaid, markPaidLoading }: ClientsTableProps) {
+function ClientsTable({
+  clients,
+  loading,
+  onMarkPaid,
+  markPaidLoading,
+  onViewHistory,
+}: ClientsTableProps) {
   const monthKey = getCurrentMonthKey();
   const columns: GridColDef<Cliente>[] = [
     {
@@ -102,7 +110,7 @@ function ClientsTable({ clients, loading, onMarkPaid, markPaidLoading }: Clients
     {
       field: 'actions',
       headerName: 'Acciones',
-      width: 120,
+      width: 150,
       align: 'center',
       headerAlign: 'center',
       sortable: false,
@@ -131,6 +139,13 @@ function ClientsTable({ clients, loading, onMarkPaid, markPaidLoading }: Clients
             {alreadyPaid && (
               <Tooltip title="Pagado este mes" arrow>
                 <CheckCircleOutlineIcon color="success" fontSize="small" sx={{ mx: 0.5 }} />
+              </Tooltip>
+            )}
+            {onViewHistory && (
+              <Tooltip title="Ver historial de pagos" arrow>
+                <IconButton color="info" size="small" onClick={() => onViewHistory(row)}>
+                  <HistoryIcon />
+                </IconButton>
               </Tooltip>
             )}
             <Tooltip title="Enviar mensaje por WhatsApp" arrow>

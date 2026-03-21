@@ -17,7 +17,8 @@ function About() {
               </Typography>
               <Typography variant="body1" color="text.secondary" lineHeight={1.8}>
                 Somos una empresa dedicada al retiro de reciclaje y residuos organicos a domicilio
-                en Santiago. Creemos que reciclar debe ser facil y accesible para todos.
+                en Rancagua y comunas cercanas. Creemos que reciclar debe ser facil y accesible para
+                todos.
               </Typography>
               <Typography variant="body1" color="text.secondary" lineHeight={1.8}>
                 Nuestro objetivo es reducir la cantidad de residuos que llegan a los vertederos,

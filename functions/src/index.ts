@@ -20,3 +20,5 @@ export {
 } from './payku/webhooks';
 
 export { importFromSheets } from './sheets/handlers';
+
+export { scheduledSyncCurrentYear } from './payku/scheduled';
