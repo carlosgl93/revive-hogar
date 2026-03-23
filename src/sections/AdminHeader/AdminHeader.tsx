@@ -18,7 +18,7 @@ function AdminHeader() {
 
   async function handleLogout() {
     await signOut(auth);
-    navigate('/admin/login');
+    navigate('/login');
   }
 
   return (
