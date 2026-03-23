@@ -7,6 +7,15 @@
         { "fieldPath": "type", "order": "ASCENDING" },
         { "fieldPath": "transactionId", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "retiros",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "fecha", "order": "ASCENDING" },
+        { "fieldPath": "choferUid", "order": "ASCENDING" },
+        { "fieldPath": "orden", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

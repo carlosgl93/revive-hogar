@@ -11,6 +11,7 @@ export {
     getPaykuSubscription,
     deletePaykuSubscription,
     affiliatePaykuCard,
+    createPaykuTransactionForClient,
     syncHistoricPayments,
 } from './payku/handlers';
 
@@ -22,3 +23,7 @@ export {
 export { importFromSheets } from './sheets/handlers';
 
 export { scheduledSyncCurrentYear } from './payku/scheduled';
+
+export { createUsuario, deleteUsuario } from './users/handlers';
+
+export { scheduledPaymentReminder } from './notifications/paymentReminder';

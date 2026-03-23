@@ -1,5 +1,5 @@
-import { FormEvent, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router';
+import { FormEvent, useCallback, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router';
 
 import {
   Alert,
@@ -14,27 +14,51 @@ import {
 } from '@mui/material';
 
 import { signInWithEmailAndPassword } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
 
-import { auth } from '@/firebase/config';
+import { auth, db } from '@/firebase/config';
+import { useAuth } from '@/firebase/useAuth';
+import { Usuario } from '@/types/models';
 
 function Login() {
   const navigate = useNavigate();
-  const location = useLocation();
+  const { user, loading: authLoading } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const from =
-    (location.state as { from?: { pathname: string } })?.from?.pathname || '/admin/pagos';
+  const redirectByRole = useCallback(
+    async (uid: string) => {
+      try {
+        const snap = await getDoc(doc(db, 'usuarios', uid));
+        if (snap.exists()) {
+          const data = snap.data() as Omit<Usuario, 'id'>;
+          if (data.role === 'chofer') {
+            navigate('/chofer/en-ruta', { replace: true });
+            return;
+          }
+        }
+        navigate('/admin/pagos', { replace: true });
+      } catch {
+        navigate('/admin/pagos', { replace: true });
+      }
+    },
+    [navigate],
+  );
+
+  useEffect(() => {
+    if (authLoading || !user) return;
+    redirectByRole(user.uid);
+  }, [user, authLoading, redirectByRole]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
     setLoading(true);
     try {
-      await signInWithEmailAndPassword(auth, email, password);
-      navigate(from, { replace: true });
+      const cred = await signInWithEmailAndPassword(auth, email, password);
+      await redirectByRole(cred.user.uid);
     } catch {
       setError('Credenciales incorrectas');
     } finally {
@@ -59,7 +83,7 @@ function Login() {
                 Revive Hogar
               </Typography>
               <Typography variant="subtitle1" textAlign="center" color="text.secondary">
-                Acceso administrador
+                Iniciar sesion
               </Typography>
 
               {error && <Alert severity="error">{error}</Alert>}

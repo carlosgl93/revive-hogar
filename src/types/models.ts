@@ -65,3 +65,63 @@ export interface RutaDiariaDoc {
   movil: string;
   entregas: RutaDiaria[];
 }
+
+// ── User roles ──────────────────────────────────────────────────────────
+
+export type UserRole = 'admin' | 'chofer';
+
+export interface Usuario {
+  id?: string;
+  uid: string;
+  email: string;
+  nombre: string;
+  role: UserRole;
+  activo: boolean;
+  createdAt: string;
+}
+
+// ── Route management ────────────────────────────────────────────────────
+
+export interface Parada {
+  clienteId: string;
+  orden: number;
+  nombre: string;
+  direccion: string;
+  comuna: string;
+  telefono: string;
+}
+
+export interface Ruta {
+  id?: string;
+  dia: string;
+  choferUid?: string;
+  choferNombre?: string;
+  paradas: Parada[];
+}
+
+// ── Pickup tracking (driver route execution) ────────────────────────────
+
+export type EstadoRetiro = 'pendiente' | 'completado' | 'problema';
+
+export type TipoProblema = 'no_pudieron_retirar' | 'mucho_material' | 'mezclado' | 'otro';
+
+export interface Retiro {
+  id?: string;
+  fecha: string;
+  rutaId: string;
+  choferUid: string;
+  clienteId: string;
+  clienteNombre: string;
+  direccion: string;
+  comuna: string;
+  telefono: string;
+  orden: number;
+  estado: EstadoRetiro;
+  tipoProblema?: TipoProblema;
+  descripcionProblema?: string;
+  fotoUrl?: string;
+  lat?: number;
+  lng?: number;
+  completadoAt?: string;
+  notas?: string;
+}

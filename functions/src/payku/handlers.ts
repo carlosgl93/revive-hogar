@@ -467,6 +467,87 @@ export const affiliatePaykuCard = onRequest(
   },
 );
 
+// ─── Transactions: Create a one-time payment link for a client ───
+
+export const createPaykuTransactionForClient = onRequest(
+  { secrets: [PAYKU_PUBLIC_TOKEN, PAYKU_PRIVATE_TOKEN] },
+  (req, res) => {
+    corsHandler(req, res, async () => {
+      if (req.method !== 'POST') {
+        res.status(405).json({ error: 'Method not allowed' });
+        return;
+      }
+      try {
+        await verifyFirebaseToken(req.headers.authorization);
+      } catch {
+        res.status(401).json({ error: 'Unauthenticated' });
+        return;
+      }
+
+      const { clienteId, email, amount, subject } = req.body;
+      if (!clienteId || !amount) {
+        res.status(400).json({ error: 'clienteId and amount are required' });
+        return;
+      }
+
+      const db = admin.firestore();
+
+      try {
+        // Look up client to get email if not provided
+        let clientEmail = email;
+        if (!clientEmail) {
+          const clientDoc = await db.collection('clientes').doc(clienteId).get();
+          if (clientDoc.exists) {
+            clientEmail = clientDoc.data()?.correo || '';
+          }
+        }
+
+        if (!clientEmail) {
+          res.status(400).json({ error: 'Client email not found' });
+          return;
+        }
+
+        const orderId = `retiro-${clienteId}-${Date.now()}`;
+        const paykuClient = createPaykuClient(
+          PAYKU_PUBLIC_TOKEN.value(),
+          PAYKU_PRIVATE_TOKEN.value(),
+        );
+
+        const response = await paykuClient.post('/transaction', {
+          email: clientEmail,
+          order: orderId,
+          subject: subject || 'Pago retiro reciclaje - Revive Hogar',
+          amount: Math.round(amount),
+          currency: 'CLP',
+          payment: 99,
+          urlreturn: 'https://revivehogar.cl/pago-completado',
+          urlnotify: 'https://webhookpaymentcharge-gqzgwmmqkq-uc.a.run.app',
+          additional_parameters: {
+            clienteId,
+          },
+        });
+
+        // Log the transaction creation
+        await db.collection('transactionLogs').add({
+          type: 'transaction_created',
+          clienteId,
+          email: clientEmail,
+          amount,
+          orderId,
+          paykuId: response.data.id,
+          paykuUrl: response.data.url,
+          createdAt: new Date().toISOString(),
+        });
+
+        res.json(response.data);
+      } catch (error) {
+        console.error('Failed to create Payku transaction:', error);
+        res.status(500).json({ error: 'Failed to create transaction in Payku' });
+      }
+    });
+  },
+);
+
 // ─── Transactions: Sync historic payments to Firestore ───
 
 interface PaykuTransactionItem {
