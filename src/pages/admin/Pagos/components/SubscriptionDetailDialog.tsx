@@ -25,7 +25,7 @@ import {
 
 import { PaykuPaidCycle, PaykuSubscriptionV3 } from '@/types/payku';
 
-import { isSubscriptionUpToDate } from './SubscriptionsTable';
+import { isSubscriptionUpToDate } from '../utils/subscriptionStatus';
 
 interface SubscriptionDetailDialogProps {
   subscription: PaykuSubscriptionV3 | null;
