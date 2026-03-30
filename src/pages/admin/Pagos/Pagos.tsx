@@ -1,100 +1,84 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import AddIcon from '@mui/icons-material/Add';
-import SearchIcon from '@mui/icons-material/Search';
 import {
   Alert,
-  Box,
   Button,
   Container,
-  InputAdornment,
   Stack,
-  Tab,
-  Tabs,
-  TextField,
+  ToggleButton,
+  ToggleButtonGroup,
   Typography,
 } from '@mui/material';
 
+import { paykuSubscriptionsApi } from '@/api';
 import { useClients } from '@/firebase/useClients';
-import { useUpdateClient } from '@/firebase/useUpdateClient';
 import { Cliente } from '@/types/models';
-import { PaykuCustomer } from '@/types/payku';
+import { PaykuSubscriptionV3 } from '@/types/payku';
 
-import CustomerPaymentsModal from '../HistorialPagos/components/CustomerPaymentsModal';
-import ClientFormDialog from './components/ClientFormDialog';
-import ClientsTable from './components/ClientsTable';
+import CardRenewalDialog from './components/CardRenewalDialog';
 import CreateSubscriptionDialog from './components/CreateSubscriptionDialog';
-import CustomerDetailModal from './components/CustomerDetailModal';
-import CustomersTable from './components/CustomersTable';
+import CreateTransactionDialog from './components/CreateTransactionDialog';
 import Dashboard from './components/Dashboard';
-import PagosFilters from './components/PagosFilters';
-import { useClientCrud } from './hooks/useClientCrud';
-import { useClientHistory } from './hooks/useClientHistory';
-import { useFilters } from './hooks/useFilters';
-import { usePaykuCustomers } from './hooks/usePaykuCustomers';
-import { usePaykuSubscriptionsV3 } from './hooks/usePaykuSubscriptionsV3';
-import { applyFilters } from './utils/filters';
+import PendientesTable from './components/PendientesTable';
+import SubscriptionDetailDialog from './components/SubscriptionDetailDialog';
+import SubscriptionsTable from './components/SubscriptionsTable';
+import { SubscriptionStatusFilter, usePaykuSubscriptionsV3 } from './hooks/usePaykuSubscriptionsV3';
 import { calculateKPIs } from './utils/kpis';
 
+const STATUS_LABELS: Record<SubscriptionStatusFilter | 'all', string> = {
+  all: 'Todas',
+  active: 'Activas',
+  suspended: 'Suspendidas',
+  cancel: 'Canceladas',
+  delete: 'Eliminadas',
+};
+
+type StatusView = SubscriptionStatusFilter | 'all';
+
 function Pagos() {
-  // Data hooks
   const { clients, loading: clientsLoading } = useClients();
-  const { filters: clientFilters, setFilter: setClientFilter } = useFilters();
-  const { subscriptions, loading: subsLoading, refetch: refetchSubs } = usePaykuSubscriptionsV3();
-  const { createClient, loading: crudLoading } = useClientCrud();
-  const { markAsPaid, loading: markPaidLoading } = useUpdateClient();
   const {
-    customers,
-    loading: customersLoading,
-    loadingMore: customersLoadingMore,
-    error: customersError,
-    hasMore: customersHasMore,
-    setSearchEmail,
-    loadMore: loadMoreCustomers,
-  } = usePaykuCustomers();
-  const { historyData, lookupHistory, clearHistory } = useClientHistory();
+    subscriptions,
+    loading: subsLoading,
+    error: subsError,
+    statusCounts,
+    refetch: refetchSubs,
+  } = usePaykuSubscriptionsV3();
 
-  // UI state
-  const [tab, setTab] = useState(0);
+  const [statusView, setStatusView] = useState<StatusView>('all');
   const [createSubOpen, setCreateSubOpen] = useState(false);
-  const [clientFormOpen, setClientFormOpen] = useState(false);
-  const [customerDetail, setCustomerDetail] = useState<PaykuCustomer | null>(null);
-  const [emailInput, setEmailInput] = useState('');
+  const [selectedSub, setSelectedSub] = useState<PaykuSubscriptionV3 | null>(null);
+  const [renewCardOpen, setRenewCardOpen] = useState<{
+    subscriptionId: string;
+    clientName: string;
+  } | null>(null);
+  const [txnClient, setTxnClient] = useState<Cliente | null>(null);
 
-  // Derived data
-  const filteredClients = useMemo(
-    () => applyFilters(clients, clientFilters),
-    [clients, clientFilters],
-  );
+  const filteredSubscriptions = useMemo(() => {
+    if (statusView === 'all') return subscriptions;
+    // For active, also include subscriptions whose combined status is al_dia/atrasado
+    if (statusView === 'active') return subscriptions.filter((s) => s.status === 'active');
+    return subscriptions.filter((s) => s.status === statusView);
+  }, [subscriptions, statusView]);
 
   const kpis = useMemo(
-    () => (subsLoading ? null : calculateKPIs(subscriptions, clients)),
-    [subscriptions, clients, subsLoading],
+    () => (subsLoading ? null : calculateKPIs(subscriptions, clients, statusCounts)),
+    [subscriptions, clients, subsLoading, statusCounts],
   );
 
-  // Handlers
-  const handleCreateClient = async (data: Parameters<typeof createClient>[0]) => {
-    await createClient(data);
-    setClientFormOpen(false);
+  const handleStatusChange = (_: React.MouseEvent<HTMLElement>, newStatus: StatusView | null) => {
+    if (newStatus) setStatusView(newStatus);
   };
 
-  const handleViewHistory = useCallback(
-    async (client: Cliente) => {
-      await lookupHistory(client);
-    },
-    [lookupHistory],
-  );
-
-  const handleSearchCustomers = useCallback(() => {
-    setSearchEmail(emailInput.trim());
-  }, [emailInput, setSearchEmail]);
-
-  const handleSearchKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === 'Enter') handleSearchCustomers();
-    },
-    [handleSearchCustomers],
-  );
+  const handleDeleteSubscription = async (subscriptionId: string) => {
+    try {
+      await paykuSubscriptionsApi.delete(subscriptionId);
+      refetchSubs();
+    } catch {
+      // silent
+    }
+  };
 
   return (
     <Container maxWidth="lg" sx={{ py: 3 }}>
@@ -103,144 +87,98 @@ function Pagos() {
           Gestion de Pagos
         </Typography>
 
-        {/* Dashboard KPIs */}
         <Dashboard kpis={kpis} loading={subsLoading || clientsLoading} />
 
-        {/* Tabs */}
-        <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-          <Tabs value={tab} onChange={(_, v) => setTab(v)}>
-            <Tab label="Clientes" />
-            <Tab label="Suscripciones" />
-          </Tabs>
-        </Box>
+        <Stack
+          direction="row"
+          justifyContent="space-between"
+          alignItems="center"
+          flexWrap="wrap"
+          gap={1}
+        >
+          <ToggleButtonGroup
+            value={statusView}
+            exclusive
+            onChange={handleStatusChange}
+            size="small"
+          >
+            {(Object.keys(STATUS_LABELS) as StatusView[]).map((key) => (
+              <ToggleButton key={key} value={key}>
+                {STATUS_LABELS[key]}
+                {key !== 'all' && statusCounts[key as SubscriptionStatusFilter] > 0 && (
+                  <Typography component="span" variant="caption" sx={{ ml: 0.5, fontWeight: 700 }}>
+                    ({statusCounts[key as SubscriptionStatusFilter]})
+                  </Typography>
+                )}
+                {key === 'all' && subscriptions.length > 0 && (
+                  <Typography component="span" variant="caption" sx={{ ml: 0.5, fontWeight: 700 }}>
+                    ({subscriptions.length})
+                  </Typography>
+                )}
+              </ToggleButton>
+            ))}
+          </ToggleButtonGroup>
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => setCreateSubOpen(true)}
+            sx={{ flexShrink: 0 }}
+          >
+            Nueva Suscripcion
+          </Button>
+        </Stack>
 
-        {/* Clientes Tab */}
-        {tab === 0 && (
-          <Stack spacing={2}>
-            <Stack direction="row" justifyContent="space-between" alignItems="center">
-              <PagosFilters
-                filters={clientFilters}
-                onFilterChange={setClientFilter}
-                clients={clients}
-              />
-              <Button
-                variant="outlined"
-                startIcon={<AddIcon />}
-                onClick={() => setClientFormOpen(true)}
-              >
-                Nuevo Cliente Payku
-              </Button>
-            </Stack>
-            <ClientsTable
-              clients={filteredClients}
-              loading={clientsLoading}
-              onMarkPaid={markAsPaid}
-              markPaidLoading={markPaidLoading}
-              onViewHistory={handleViewHistory}
-            />
-          </Stack>
+        {subsError && (
+          <Alert severity="error">Error al cargar suscripciones: {subsError.message}</Alert>
         )}
 
-        {/* Suscripciones / Clientes Payku Tab */}
-        {tab === 1 && (
-          <Stack spacing={2}>
-            <Stack direction="row" justifyContent="space-between" alignItems="center">
-              <Stack direction="row" spacing={1} alignItems="center">
-                <TextField
-                  size="small"
-                  placeholder="Buscar por email..."
-                  value={emailInput}
-                  onChange={(e) => setEmailInput(e.target.value)}
-                  onKeyDown={handleSearchKeyDown}
-                  slotProps={{
-                    input: {
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <SearchIcon fontSize="small" />
-                        </InputAdornment>
-                      ),
-                    },
-                  }}
-                  sx={{ minWidth: 300 }}
-                />
-                <Button
-                  variant="contained"
-                  onClick={handleSearchCustomers}
-                  disabled={customersLoading}
-                  size="medium"
-                >
-                  Buscar
-                </Button>
-                {emailInput && (
-                  <Button
-                    variant="text"
-                    size="small"
-                    onClick={() => {
-                      setEmailInput('');
-                      setSearchEmail('');
-                    }}
-                  >
-                    Limpiar
-                  </Button>
-                )}
-              </Stack>
-              <Button
-                variant="contained"
-                startIcon={<AddIcon />}
-                onClick={() => setCreateSubOpen(true)}
-                sx={{ flexShrink: 0 }}
-              >
-                Nueva Suscripcion
-              </Button>
-            </Stack>
-            {customersError && (
-              <Alert severity="error">
-                Error al cargar clientes Payku: {customersError.message}
-              </Alert>
-            )}
-            <CustomersTable
-              customers={customers}
-              loading={customersLoading}
-              onViewDetail={setCustomerDetail}
+        <SubscriptionsTable
+          subscriptions={filteredSubscriptions}
+          loading={subsLoading}
+          onRenewCard={(id, name) => setRenewCardOpen({ subscriptionId: id, clientName: name })}
+          onDelete={handleDeleteSubscription}
+          onRowClick={setSelectedSub}
+        />
+
+        {/* Clients with pending debt (monto pendiente) */}
+        {clients.some((c) => c.activo && (c.montoPendiente ?? 0) > 0) && (
+          <>
+            <Typography variant="h6" fontWeight={600} sx={{ mt: 2 }}>
+              Clientes con Monto Pendiente
+            </Typography>
+            <PendientesTable
+              clients={clients}
+              loading={clientsLoading}
+              onCreateSubscription={() => setCreateSubOpen(true)}
+              onCreateTransaction={(c) => setTxnClient(c)}
             />
-            {customersHasMore && !customersLoading && (
-              <Box sx={{ textAlign: 'center' }}>
-                <Button
-                  variant="outlined"
-                  onClick={loadMoreCustomers}
-                  disabled={customersLoadingMore}
-                >
-                  {customersLoadingMore ? 'Cargando...' : 'Cargar mas clientes'}
-                </Button>
-              </Box>
-            )}
-          </Stack>
+          </>
         )}
       </Stack>
 
-      {/* Dialogs */}
       <CreateSubscriptionDialog
         open={createSubOpen}
         onClose={() => setCreateSubOpen(false)}
         onCreated={refetchSubs}
         clients={clients}
       />
-      <ClientFormDialog
-        open={clientFormOpen}
-        onClose={() => setClientFormOpen(false)}
-        onSubmit={handleCreateClient}
-        loading={crudLoading}
+      {renewCardOpen && (
+        <CardRenewalDialog
+          open
+          subscriptionId={renewCardOpen.subscriptionId}
+          clientName={renewCardOpen.clientName}
+          onClose={() => setRenewCardOpen(null)}
+        />
+      )}
+      <SubscriptionDetailDialog
+        subscription={selectedSub}
+        open={!!selectedSub}
+        onClose={() => setSelectedSub(null)}
       />
-      <CustomerDetailModal
-        customer={customerDetail}
-        open={!!customerDetail}
-        onClose={() => setCustomerDetail(null)}
-      />
-      <CustomerPaymentsModal
-        customer={historyData}
-        open={!!historyData}
-        onClose={clearHistory}
-        onToggleSettled={() => {}}
+      <CreateTransactionDialog
+        open={!!txnClient}
+        client={txnClient}
+        onClose={() => setTxnClient(null)}
       />
     </Container>
   );

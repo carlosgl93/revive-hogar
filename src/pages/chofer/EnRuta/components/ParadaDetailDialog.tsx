@@ -29,10 +29,13 @@ import { useNotifications } from '@toolpad/core/useNotifications';
 import { createPaykuTransaction } from '@/api/payku';
 import { Cliente, Retiro } from '@/types/models';
 
+import type { ClientePaymentInfo } from '../EnRuta';
+
 interface Props {
   open: boolean;
   retiro: Retiro | null;
   cliente: Cliente | null;
+  paymentInfo?: ClientePaymentInfo;
   onClose: () => void;
   onComplete: (id: string) => void;
   onReportProblem: (id: string) => void;
@@ -90,10 +93,23 @@ const PAYMENT_COLORS: Record<string, 'success' | 'warning' | 'error' | 'default'
   atrasado: 'error',
 };
 
+const PAYKU_STATUS_LABELS: Record<string, string> = {
+  al_dia: 'Suscripcion al dia',
+  atrasado: 'Suscripcion atrasada',
+  sin_suscripcion: 'Sin suscripcion Payku',
+};
+
+const PAYKU_STATUS_COLORS: Record<string, 'success' | 'warning' | 'error' | 'default'> = {
+  al_dia: 'success',
+  atrasado: 'error',
+  sin_suscripcion: 'default',
+};
+
 function ParadaDetailDialog({
   open,
   retiro,
   cliente,
+  paymentInfo,
   onClose,
   onComplete,
   onReportProblem,
@@ -105,9 +121,10 @@ function ParadaDetailDialog({
   if (!retiro) return null;
 
   const mesKey = getMesKey();
-  const paymentStatus = cliente?.pagos?.[mesKey] || '';
+  const paymentStatus = paymentInfo?.paymentStatus || cliente?.pagos?.[mesKey] || '';
   const isDone = retiro.estado !== 'pendiente';
   const isOverdue = paymentStatus === 'atrasado' || paymentStatus === 'pendiente';
+  const canCreatePayment = isOverdue || paymentInfo?.paykuStatus === 'sin_suscripcion';
 
   const vamosEnCaminoUrl = buildWhatsAppUrl(
     retiro.telefono,
@@ -195,12 +212,21 @@ function ParadaDetailDialog({
             <Typography variant="body2" color="text.secondary">
               Estado de pago ({mesKey})
             </Typography>
-            <Chip
-              label={PAYMENT_LABELS[paymentStatus] || 'Sin info'}
-              color={PAYMENT_COLORS[paymentStatus] || 'default'}
-              size="small"
-              sx={{ mt: 0.5 }}
-            />
+            <Stack direction="row" gap={0.5} sx={{ mt: 0.5 }} flexWrap="wrap">
+              <Chip
+                label={PAYMENT_LABELS[paymentStatus] || 'Sin info'}
+                color={PAYMENT_COLORS[paymentStatus] || 'default'}
+                size="small"
+              />
+              {paymentInfo && (
+                <Chip
+                  label={PAYKU_STATUS_LABELS[paymentInfo.paykuStatus]}
+                  color={PAYKU_STATUS_COLORS[paymentInfo.paykuStatus]}
+                  size="small"
+                  variant="outlined"
+                />
+              )}
+            </Stack>
           </Box>
 
           {cliente?.plan && (
@@ -291,10 +317,10 @@ function ParadaDetailDialog({
               </Button>
             )}
 
-            {isOverdue && (
+            {canCreatePayment && (
               <Button
                 variant="contained"
-                color="error"
+                color={isOverdue ? 'error' : 'primary'}
                 startIcon={
                   creatingPayLink ? <CircularProgress size={20} color="inherit" /> : <PaymentIcon />
                 }
@@ -302,7 +328,11 @@ function ParadaDetailDialog({
                 disabled={creatingPayLink}
                 fullWidth
               >
-                {creatingPayLink ? 'Creando link...' : 'Enviar link de pago'}
+                {creatingPayLink
+                  ? 'Creando link...'
+                  : isOverdue
+                    ? 'Enviar link de pago'
+                    : 'Crear suscripcion / cobro'}
               </Button>
             )}
 

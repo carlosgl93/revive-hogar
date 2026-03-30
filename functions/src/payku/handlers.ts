@@ -2,15 +2,18 @@ import cors from 'cors';
 import { createHash } from 'crypto';
 import * as admin from 'firebase-admin';
 import { onRequest } from 'firebase-functions/v2/https';
-import { defineSecret } from 'firebase-functions/params';
 
 import { verifyFirebaseToken } from '../middleware';
 import { createPaykuClient } from './client';
 
 const corsHandler = cors({ origin: true });
 
-const PAYKU_PUBLIC_TOKEN = defineSecret('PAYKU_PUBLIC_TOKEN');
-const PAYKU_PRIVATE_TOKEN = defineSecret('PAYKU_PRIVATE_TOKEN');
+function buildPaykuClient() {
+  const pub = process.env.PAYKU_PUBLIC_TOKEN;
+  const priv = process.env.PAYKU_PRIVATE_TOKEN;
+  if (!pub || !priv) throw new Error('PAYKU_PUBLIC_TOKEN and PAYKU_PRIVATE_TOKEN must be set');
+  return createPaykuClient(pub, priv);
+}
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -41,7 +44,7 @@ function buildQueryString(params: Record<string, string | number | boolean | und
 // ─── Existing: List Subscriptions (V2) ───
 
 export const listPaykuSubscriptions = onRequest(
-  { secrets: [PAYKU_PUBLIC_TOKEN, PAYKU_PRIVATE_TOKEN] },
+  {},
   (req, res) => {
     corsHandler(req, res, async () => {
       try {
@@ -51,7 +54,7 @@ export const listPaykuSubscriptions = onRequest(
         return;
       }
 
-      const client = createPaykuClient(PAYKU_PUBLIC_TOKEN.value(), PAYKU_PRIVATE_TOKEN.value());
+      const client = buildPaykuClient();
 
       try {
         const response = await client.get('/sususcription');
@@ -67,7 +70,7 @@ export const listPaykuSubscriptions = onRequest(
 // ─── Existing: Get Subscription Status ───
 
 export const getPaykuSubscriptionStatus = onRequest(
-  { secrets: [PAYKU_PUBLIC_TOKEN, PAYKU_PRIVATE_TOKEN] },
+  {},
   (req, res) => {
     corsHandler(req, res, async () => {
       try {
@@ -83,7 +86,7 @@ export const getPaykuSubscriptionStatus = onRequest(
         return;
       }
 
-      const client = createPaykuClient(PAYKU_PUBLIC_TOKEN.value(), PAYKU_PRIVATE_TOKEN.value());
+      const client = buildPaykuClient();
 
       try {
         const response = await client.get(`/sususcription/${subscriptionId}`);
@@ -99,7 +102,7 @@ export const getPaykuSubscriptionStatus = onRequest(
 // ─── Clients: List (paginated) ───
 
 export const listPaykuClients = onRequest(
-  { secrets: [PAYKU_PUBLIC_TOKEN, PAYKU_PRIVATE_TOKEN] },
+  {},
   (req, res) => {
     corsHandler(req, res, async () => {
       if (req.method !== 'GET') {
@@ -113,7 +116,7 @@ export const listPaykuClients = onRequest(
         return;
       }
 
-      const client = createPaykuClient(PAYKU_PUBLIC_TOKEN.value(), PAYKU_PRIVATE_TOKEN.value());
+      const client = buildPaykuClient();
       const page = req.query.page as string | undefined;
       const perPage = req.query.per_page as string | undefined;
 
@@ -136,7 +139,7 @@ export const listPaykuClients = onRequest(
 // ─── Clients: Get by ID or email ───
 
 export const getPaykuClient = onRequest(
-  { secrets: [PAYKU_PUBLIC_TOKEN, PAYKU_PRIVATE_TOKEN] },
+  {},
   (req, res) => {
     corsHandler(req, res, async () => {
       if (req.method !== 'GET') {
@@ -156,7 +159,7 @@ export const getPaykuClient = onRequest(
         return;
       }
 
-      const client = createPaykuClient(PAYKU_PUBLIC_TOKEN.value(), PAYKU_PRIVATE_TOKEN.value());
+      const client = buildPaykuClient();
 
       try {
         const response = await client.get(`/suclient/${identifier}`);
@@ -172,7 +175,7 @@ export const getPaykuClient = onRequest(
 // ─── Clients: Create ───
 
 export const createPaykuClientFn = onRequest(
-  { secrets: [PAYKU_PUBLIC_TOKEN, PAYKU_PRIVATE_TOKEN] },
+  {},
   (req, res) => {
     corsHandler(req, res, async () => {
       if (req.method !== 'POST') {
@@ -191,7 +194,7 @@ export const createPaykuClientFn = onRequest(
         return;
       }
 
-      const client = createPaykuClient(PAYKU_PUBLIC_TOKEN.value(), PAYKU_PRIVATE_TOKEN.value());
+      const client = buildPaykuClient();
 
       try {
         const response = await client.post('/suclient', req.body);
@@ -207,7 +210,7 @@ export const createPaykuClientFn = onRequest(
 // ─── Clients: Update ───
 
 export const updatePaykuClient = onRequest(
-  { secrets: [PAYKU_PUBLIC_TOKEN, PAYKU_PRIVATE_TOKEN] },
+  {},
   (req, res) => {
     corsHandler(req, res, async () => {
       if (req.method !== 'PUT') {
@@ -227,7 +230,7 @@ export const updatePaykuClient = onRequest(
         return;
       }
 
-      const client = createPaykuClient(PAYKU_PUBLIC_TOKEN.value(), PAYKU_PRIVATE_TOKEN.value());
+      const client = buildPaykuClient();
 
       try {
         const response = await client.put(`/suclient/${identifier}`, req.body);
@@ -243,7 +246,7 @@ export const updatePaykuClient = onRequest(
 // ─── Clients: Delete ───
 
 export const deletePaykuClient = onRequest(
-  { secrets: [PAYKU_PUBLIC_TOKEN, PAYKU_PRIVATE_TOKEN] },
+  {},
   (req, res) => {
     corsHandler(req, res, async () => {
       if (req.method !== 'DELETE') {
@@ -263,7 +266,7 @@ export const deletePaykuClient = onRequest(
         return;
       }
 
-      const client = createPaykuClient(PAYKU_PUBLIC_TOKEN.value(), PAYKU_PRIVATE_TOKEN.value());
+      const client = buildPaykuClient();
 
       try {
         const response = await client.delete(`/suclient/${identifier}`);
@@ -279,7 +282,7 @@ export const deletePaykuClient = onRequest(
 // ─── Subscriptions: List V3 (with date + status filters + pagination) ───
 
 export const listPaykuSubscriptionsV3 = onRequest(
-  { secrets: [PAYKU_PUBLIC_TOKEN, PAYKU_PRIVATE_TOKEN] },
+  {},
   (req, res) => {
     corsHandler(req, res, async () => {
       if (req.method !== 'GET') {
@@ -293,7 +296,7 @@ export const listPaykuSubscriptionsV3 = onRequest(
         return;
       }
 
-      const client = createPaykuClient(PAYKU_PUBLIC_TOKEN.value(), PAYKU_PRIVATE_TOKEN.value());
+      const client = buildPaykuClient();
 
       const qs = buildQueryString({
         date_init: req.query.date_init as string | undefined,
@@ -321,7 +324,7 @@ export const listPaykuSubscriptionsV3 = onRequest(
 // ─── Subscriptions: Create ───
 
 export const createPaykuSubscription = onRequest(
-  { secrets: [PAYKU_PUBLIC_TOKEN, PAYKU_PRIVATE_TOKEN] },
+  {},
   (req, res) => {
     corsHandler(req, res, async () => {
       if (req.method !== 'POST') {
@@ -341,7 +344,7 @@ export const createPaykuSubscription = onRequest(
         return;
       }
 
-      const client = createPaykuClient(PAYKU_PUBLIC_TOKEN.value(), PAYKU_PRIVATE_TOKEN.value());
+      const client = buildPaykuClient();
 
       try {
         const response = await client.post('/sususcription', {
@@ -360,7 +363,7 @@ export const createPaykuSubscription = onRequest(
 // ─── Subscriptions: Get single ───
 
 export const getPaykuSubscription = onRequest(
-  { secrets: [PAYKU_PUBLIC_TOKEN, PAYKU_PRIVATE_TOKEN] },
+  {},
   (req, res) => {
     corsHandler(req, res, async () => {
       if (req.method !== 'GET') {
@@ -380,7 +383,7 @@ export const getPaykuSubscription = onRequest(
         return;
       }
 
-      const client = createPaykuClient(PAYKU_PUBLIC_TOKEN.value(), PAYKU_PRIVATE_TOKEN.value());
+      const client = buildPaykuClient();
 
       try {
         const response = await client.get(`/sususcription/${subscriptionId}`);
@@ -396,7 +399,7 @@ export const getPaykuSubscription = onRequest(
 // ─── Subscriptions: Delete ───
 
 export const deletePaykuSubscription = onRequest(
-  { secrets: [PAYKU_PUBLIC_TOKEN, PAYKU_PRIVATE_TOKEN] },
+  {},
   (req, res) => {
     corsHandler(req, res, async () => {
       if (req.method !== 'DELETE') {
@@ -416,7 +419,7 @@ export const deletePaykuSubscription = onRequest(
         return;
       }
 
-      const client = createPaykuClient(PAYKU_PUBLIC_TOKEN.value(), PAYKU_PRIVATE_TOKEN.value());
+      const client = buildPaykuClient();
 
       try {
         const response = await client.delete(`/sususcription/${subscriptionId}`);
@@ -432,7 +435,7 @@ export const deletePaykuSubscription = onRequest(
 // ─── Card: Affiliate new card to subscription ───
 
 export const affiliatePaykuCard = onRequest(
-  { secrets: [PAYKU_PUBLIC_TOKEN, PAYKU_PRIVATE_TOKEN] },
+  {},
   (req, res) => {
     corsHandler(req, res, async () => {
       if (req.method !== 'POST') {
@@ -452,7 +455,7 @@ export const affiliatePaykuCard = onRequest(
         return;
       }
 
-      const client = createPaykuClient(PAYKU_PUBLIC_TOKEN.value(), PAYKU_PRIVATE_TOKEN.value());
+      const client = buildPaykuClient();
 
       try {
         const response = await client.post('/suinscriptionscards', {
@@ -470,7 +473,7 @@ export const affiliatePaykuCard = onRequest(
 // ─── Transactions: Create a one-time payment link for a client ───
 
 export const createPaykuTransactionForClient = onRequest(
-  { secrets: [PAYKU_PUBLIC_TOKEN, PAYKU_PRIVATE_TOKEN] },
+  {},
   (req, res) => {
     corsHandler(req, res, async () => {
       if (req.method !== 'POST') {
@@ -507,11 +510,8 @@ export const createPaykuTransactionForClient = onRequest(
           return;
         }
 
-        const orderId = `retiro-${clienteId}-${Date.now()}`;
-        const paykuClient = createPaykuClient(
-          PAYKU_PUBLIC_TOKEN.value(),
-          PAYKU_PRIVATE_TOKEN.value(),
-        );
+        const orderId = `ret-${Date.now()}`;
+        const paykuClient = buildPaykuClient();
 
         const response = await paykuClient.post('/transaction', {
           email: clientEmail,
@@ -527,6 +527,15 @@ export const createPaykuTransactionForClient = onRequest(
           },
         });
 
+        if (response.data.status === 'failed' || !response.data.url) {
+          console.error('Payku returned error:', response.data);
+          res.status(422).json({
+            error: response.data.message_error || 'Payku rejected the transaction',
+            details: response.data,
+          });
+          return;
+        }
+
         // Log the transaction creation
         await db.collection('transactionLogs').add({
           type: 'transaction_created',
@@ -534,8 +543,8 @@ export const createPaykuTransactionForClient = onRequest(
           email: clientEmail,
           amount,
           orderId,
-          paykuId: response.data.id,
-          paykuUrl: response.data.url,
+          paykuId: response.data.id ?? null,
+          paykuUrl: response.data.url ?? null,
           createdAt: new Date().toISOString(),
         });
 
@@ -582,7 +591,7 @@ function hashDireccion(direccion: string): string {
 }
 
 export const syncHistoricPayments = onRequest(
-  { secrets: [PAYKU_PUBLIC_TOKEN, PAYKU_PRIVATE_TOKEN], timeoutSeconds: 540 },
+  { timeoutSeconds: 540 },
   (req, res) => {
     corsHandler(req, res, async () => {
       if (req.method !== 'POST') {
@@ -602,7 +611,7 @@ export const syncHistoricPayments = onRequest(
         return;
       }
 
-      const paykuClient = createPaykuClient(PAYKU_PUBLIC_TOKEN.value(), PAYKU_PRIVATE_TOKEN.value());
+      const paykuClient = buildPaykuClient();
       const db = admin.firestore();
 
       // 1. Fetch all successful transactions for the year, paginating

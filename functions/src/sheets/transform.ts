@@ -95,6 +95,7 @@ export function transformRow(
     tipoPago: normalizeTipoPago(get('tipo de pago')),
     activo: true,
     pagos,
+    montoPendiente: normalizeMonto(get('monto pendiente')),
   };
 
   return { cliente, error: null, rowIndex };

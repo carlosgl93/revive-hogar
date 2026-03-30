@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import AddIcon from '@mui/icons-material/Add';
-import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
-import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import DeleteIcon from '@mui/icons-material/Delete';
+import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import SaveIcon from '@mui/icons-material/Save';
+import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import {
   Accordion,
   AccordionDetails,
@@ -32,8 +32,23 @@ import {
   Typography,
 } from '@mui/material';
 
+import {
+  DndContext,
+  DragEndEvent,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  arrayMove,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { useNotifications } from '@toolpad/core/useNotifications';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, setDoc, writeBatch } from 'firebase/firestore';
 
 import { createUsuario, deleteUsuario } from '@/api/usuarios';
 import Loading from '@/components/Loading';
@@ -44,8 +59,63 @@ import { useUsuarios } from '@/firebase/useUsuarios';
 import { Parada, Ruta } from '@/types/models';
 
 import AddClienteDialog from './components/AddClienteDialog';
+import CambiarDiaDialog from './components/CambiarDiaDialog';
 
 const DIAS = ['Lunes', 'Martes', 'Miercoles', 'Jueves', 'Viernes', 'Sabado'];
+
+interface SortableParadaItemProps {
+  parada: Parada;
+  index: number;
+  onCambiarDia: (parada: Parada) => void;
+  onRemove: (index: number) => void;
+}
+
+function SortableParadaItem({ parada, index, onCambiarDia, onRemove }: SortableParadaItemProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: parada.clienteId,
+  });
+
+  return (
+    <ListItem
+      ref={setNodeRef}
+      divider
+      sx={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.5 : 1,
+        bgcolor: isDragging ? 'action.hover' : 'background.paper',
+        zIndex: isDragging ? 1 : 'auto',
+      }}
+      secondaryAction={
+        <Stack direction="row" spacing={0.5}>
+          <Tooltip title="Cambiar dia" arrow>
+            <IconButton size="small" color="primary" onClick={() => onCambiarDia(parada)}>
+              <SwapHorizIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Quitar" arrow>
+            <IconButton size="small" color="error" onClick={() => onRemove(index)}>
+              <DeleteIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        </Stack>
+      }
+    >
+      <IconButton
+        size="small"
+        sx={{ cursor: 'grab', mr: 1, color: 'text.disabled' }}
+        {...attributes}
+        {...listeners}
+      >
+        <DragIndicatorIcon fontSize="small" />
+      </IconButton>
+      <ListItemText
+        primary={`${parada.orden}. ${parada.nombre}`}
+        secondary={`${parada.direccion}, ${parada.comuna} — ${parada.telefono}`}
+      />
+    </ListItem>
+  );
+}
 
 function Rutas() {
   const { rutas, loading: rutasLoading, error: rutasError } = useRutas();
@@ -59,6 +129,8 @@ function Rutas() {
   const [saving, setSaving] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [cambiarDiaTarget, setCambiarDiaTarget] = useState<Parada | null>(null);
+  const [cambiarDiaSaving, setCambiarDiaSaving] = useState(false);
 
   // Chofer CRUD state
   const [newChoferNombre, setNewChoferNombre] = useState('');
@@ -165,22 +237,15 @@ function Rutas() {
     setDirty(true);
   }
 
-  function handleMoveUp(index: number) {
-    if (index === 0) return;
-    setLocalParadas((prev) => {
-      const next = [...prev];
-      [next[index - 1], next[index]] = [next[index], next[index - 1]];
-      return next.map((p, i) => ({ ...p, orden: i + 1 }));
-    });
-    setDirty(true);
-  }
+  const sensors = useSensors(useSensor(PointerSensor));
 
-  function handleMoveDown(index: number) {
-    if (index === localParadas.length - 1) return;
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
     setLocalParadas((prev) => {
-      const next = [...prev];
-      [next[index], next[index + 1]] = [next[index + 1], next[index]];
-      return next.map((p, i) => ({ ...p, orden: i + 1 }));
+      const oldIndex = prev.findIndex((p) => p.clienteId === active.id);
+      const newIndex = prev.findIndex((p) => p.clienteId === over.id);
+      return arrayMove(prev, oldIndex, newIndex).map((p, i) => ({ ...p, orden: i + 1 }));
     });
     setDirty(true);
   }
@@ -209,6 +274,49 @@ function Rutas() {
       notifications.show('Error al guardar ruta', { severity: 'error' });
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleCambiarDia(targetDia: string) {
+    if (!cambiarDiaTarget) return;
+    setCambiarDiaSaving(true);
+    try {
+      const batch = writeBatch(db);
+
+      // Remove parada from source day's route
+      const sourceRuta = rutas.find((r) => r.dia === dia);
+      if (sourceRuta?.id) {
+        const updatedSource = sourceRuta.paradas
+          .filter((p) => p.clienteId !== cambiarDiaTarget.clienteId)
+          .map((p, i) => ({ ...p, orden: i + 1 }));
+        batch.update(doc(db, 'rutas', sourceRuta.id), { paradas: updatedSource });
+      }
+
+      // Add parada to target day's route
+      const targetRuta = rutas.find((r) => r.dia === targetDia);
+      const targetRutaId = targetRuta?.id ?? targetDia;
+      const targetParadas = targetRuta ? [...targetRuta.paradas] : [];
+      targetParadas.push({ ...cambiarDiaTarget, orden: targetParadas.length + 1 });
+
+      if (targetRuta) {
+        batch.update(doc(db, 'rutas', targetRutaId), { paradas: targetParadas });
+      } else {
+        batch.set(doc(db, 'rutas', targetRutaId), { dia: targetDia, paradas: targetParadas });
+      }
+
+      // Update client's dia field
+      batch.update(doc(db, 'clientes', cambiarDiaTarget.clienteId), { dia: targetDia });
+
+      await batch.commit();
+      notifications.show(`${cambiarDiaTarget.nombre} movido de ${dia} a ${targetDia}`, {
+        severity: 'success',
+        autoHideDuration: 3000,
+      });
+      setCambiarDiaTarget(null);
+    } catch {
+      notifications.show('Error al cambiar dia de parada', { severity: 'error' });
+    } finally {
+      setCambiarDiaSaving(false);
     }
   }
 
@@ -381,50 +489,28 @@ function Rutas() {
         </Paper>
       ) : (
         <Paper>
-          <List disablePadding>
-            {localParadas.map((parada, index) => (
-              <ListItem
-                key={parada.clienteId}
-                divider={index < localParadas.length - 1}
-                secondaryAction={
-                  <Stack direction="row" spacing={0.5}>
-                    <Tooltip title="Subir" arrow>
-                      <span>
-                        <IconButton
-                          size="small"
-                          disabled={index === 0}
-                          onClick={() => handleMoveUp(index)}
-                        >
-                          <ArrowUpwardIcon fontSize="small" />
-                        </IconButton>
-                      </span>
-                    </Tooltip>
-                    <Tooltip title="Bajar" arrow>
-                      <span>
-                        <IconButton
-                          size="small"
-                          disabled={index === localParadas.length - 1}
-                          onClick={() => handleMoveDown(index)}
-                        >
-                          <ArrowDownwardIcon fontSize="small" />
-                        </IconButton>
-                      </span>
-                    </Tooltip>
-                    <Tooltip title="Quitar" arrow>
-                      <IconButton size="small" color="error" onClick={() => handleRemove(index)}>
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                  </Stack>
-                }
-              >
-                <ListItemText
-                  primary={`${parada.orden}. ${parada.nombre}`}
-                  secondary={`${parada.direccion}, ${parada.comuna} — ${parada.telefono}`}
-                />
-              </ListItem>
-            ))}
-          </List>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext
+              items={localParadas.map((p) => p.clienteId)}
+              strategy={verticalListSortingStrategy}
+            >
+              <List disablePadding>
+                {localParadas.map((parada, index) => (
+                  <SortableParadaItem
+                    key={parada.clienteId}
+                    parada={parada}
+                    index={index}
+                    onCambiarDia={setCambiarDiaTarget}
+                    onRemove={handleRemove}
+                  />
+                ))}
+              </List>
+            </SortableContext>
+          </DndContext>
         </Paper>
       )}
 
@@ -433,6 +519,14 @@ function Rutas() {
         onClose={() => setAddOpen(false)}
         onAdd={handleAddParada}
         availableClients={availableClients}
+      />
+      <CambiarDiaDialog
+        open={!!cambiarDiaTarget}
+        onClose={() => setCambiarDiaTarget(null)}
+        parada={cambiarDiaTarget}
+        currentDia={dia}
+        onConfirm={handleCambiarDia}
+        saving={cambiarDiaSaving}
       />
     </Stack>
   );

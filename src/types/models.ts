@@ -40,6 +40,24 @@ export interface Cliente {
   activo: boolean;
   notas?: string;
   pagos: Record<string, PaymentStatus>;
+  montoPendiente?: number;
+}
+
+// ── Weighing records (pesaje) ──────────────────────────────────────────
+
+export interface Pesaje {
+  id?: string;
+  fecha: string;
+  choferUid: string;
+  choferNombre: string;
+  rutaId: string;
+  vidrio: number;
+  cartonPapel: number;
+  pet: number;
+  latas: number;
+  totalKg: number;
+  fotoUrl?: string;
+  createdAt: string;
 }
 
 /**
