@@ -1,7 +1,7 @@
 import cors from 'cors';
 import * as admin from 'firebase-admin';
 import { onRequest } from 'firebase-functions/v2/https';
-import { defineSecret, defineString } from 'firebase-functions/params';
+import { defineString } from 'firebase-functions/params';
 
 import { verifyFirebaseToken } from '../middleware';
 import { getSheetRows } from './client';
@@ -9,7 +9,6 @@ import { buildHeaderIndex, transformRow } from './transform';
 
 const corsHandler = cors({ origin: true });
 
-const SHEETS_SPREADSHEET_ID = defineSecret('SHEETS_SPREADSHEET_ID');
 const SHEETS_SHEET_NAME = defineString('SHEETS_SHEET_NAME', { default: 'Total consolidado' });
 
 const VALID_DIAS: Record<string, string> = {
@@ -42,7 +41,7 @@ interface ImportResult {
 }
 
 export const importFromSheets = onRequest(
-  { secrets: [SHEETS_SPREADSHEET_ID] },
+  {},
   (req, res) => {
     corsHandler(req, res, async () => {
       try {
@@ -56,7 +55,9 @@ export const importFromSheets = onRequest(
       const result: ImportResult = { created: 0, updated: 0, skipped: 0, errors: [], totalSheetRows: 0, emptyRows: 0, rutasCreated: 0 };
 
       try {
-        const rows = await getSheetRows(SHEETS_SPREADSHEET_ID.value(), SHEETS_SHEET_NAME.value());
+        const spreadsheetId = process.env.SHEETS_SPREADSHEET_ID;
+        if (!spreadsheetId) throw new Error('SHEETS_SPREADSHEET_ID must be set');
+        const rows = await getSheetRows(spreadsheetId, SHEETS_SHEET_NAME.value());
 
         if (rows.length < 2) {
           res.json({ ...result, errors: ['Sheet tiene menos de 2 filas (no hay datos)'] });

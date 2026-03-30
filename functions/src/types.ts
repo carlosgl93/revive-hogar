@@ -27,4 +27,5 @@ export interface Cliente {
   paykuSubscriptionUrl?: string;
   fechaCorte?: string;
   notas?: string;
+  montoPendiente?: number;
 }

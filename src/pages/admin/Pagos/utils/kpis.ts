@@ -1,6 +1,9 @@
 import { Cliente } from '@/types/models';
 import { PaykuSubscriptionV3 } from '@/types/payku';
 
+import { StatusCounts } from '../hooks/usePaykuSubscriptionsV3';
+import { isSubscriptionUpToDate } from './subscriptionStatus';
+
 const MONTH_NAMES = [
   'enero',
   'febrero',
@@ -16,28 +19,23 @@ const MONTH_NAMES = [
   'diciembre',
 ];
 
-/**
- * Returns the current month key matching the pagos map format, e.g. "marzo 2026".
- */
 export function getCurrentMonthKey(): string {
   const now = new Date();
   return `${MONTH_NAMES[now.getMonth()]} ${now.getFullYear()}`;
 }
 
-/** Payment types that generate income (includes 'Particular' as legacy alias for Transferencia) */
 const PAYING_TYPES = ['Suscripcion', 'Transferencia', 'Particular', 'Boton de pago'];
 
 export interface DashboardKPIs {
-  totalSubscriptions: number;
   activeSubscriptions: number;
   suspendedSubscriptions: number;
-  registeredSubscriptions: number;
   cancelledSubscriptions: number;
-  /** Optimistic: sum of monto for all active paying clients */
+  deletedSubscriptions: number;
+  totalSubscriptions: number;
+  subsAlDia: number;
+  subsAtrasados: number;
   expectedMonthlyIncome: number;
-  /** Confirmed: sum of actual payments received this month */
   actualMonthlyIncome: number;
-  expectedYearlyIncome: number;
   subscriptionMonthlyIncome: number;
   transferMonthlyIncome: number;
   botonDePagoMonthlyIncome: number;
@@ -45,36 +43,54 @@ export interface DashboardKPIs {
   clientsAlDia: number;
   clientsDeudor: number;
   collectionRate: number;
+  totalMontoPendiente: number;
+  clientsConPendiente: number;
 }
 
 export function calculateKPIs(
-  subscriptions: PaykuSubscriptionV3[],
+  allSubscriptions: PaykuSubscriptionV3[],
   clients: Cliente[],
+  statusCounts: StatusCounts,
 ): DashboardKPIs {
-  const activeSubscriptions = subscriptions.filter((s) => s.status === 'active').length;
-  const suspendedSubscriptions = subscriptions.filter((s) => s.status === 'suspended').length;
-  const registeredSubscriptions = subscriptions.filter((s) => s.status === 'register').length;
-  const cancelledSubscriptions = subscriptions.filter(
-    (s) => s.status === 'cancel' || s.status === 'finish',
-  ).length;
-
   const monthKey = getCurrentMonthKey();
   const activeClients = clients.filter((c) => c.activo);
 
-  // --- Expected income (optimistic: everyone pays) ---
-  const expectedMonthlyIncome = activeClients
-    .filter((c) => PAYING_TYPES.includes(c.tipoPago))
+  // Active subscriptions from the full dataset
+  const activeSubs = allSubscriptions.filter((s) => s.status === 'active');
+
+  // Up to date logic for active subs
+  let subsAlDia = 0;
+  let subsAtrasados = 0;
+  for (const sub of activeSubs) {
+    if (isSubscriptionUpToDate(sub.paid)) {
+      subsAlDia++;
+    } else {
+      subsAtrasados++;
+    }
+  }
+
+  // Expected income from internal clients (Transferencia / Boton de pago)
+  const expectedClientIncome = activeClients
+    .filter((c) => PAYING_TYPES.includes(c.tipoPago) && c.tipoPago !== 'Suscripcion')
     .reduce((sum, c) => sum + (c.monto ?? 0), 0);
 
-  // --- Actual income from Payku subscriptions (last successful paid cycle) ---
-  const subscriptionMonthlyIncome = subscriptions
-    .filter((s) => s.status === 'active')
+  // Expected subscription income: for each active sub, use last successful payment amount as estimate
+  const expectedSubIncome = activeSubs.reduce((sum, s) => {
+    const lastSuccess = [...(s.paid ?? [])].reverse().find((p) => p.status === 'success');
+    return sum + (lastSuccess?.amount_paid ?? 0);
+  }, 0);
+
+  const expectedMonthlyIncome = expectedSubIncome + expectedClientIncome;
+
+  // Actual subscription income (only from al-dia subs)
+  const subscriptionMonthlyIncome = activeSubs
+    .filter((s) => isSubscriptionUpToDate(s.paid))
     .reduce((sum, s) => {
       const lastSuccess = [...(s.paid ?? [])].reverse().find((p) => p.status === 'success');
       return sum + (lastSuccess?.amount_paid ?? 0);
     }, 0);
 
-  // --- Actual income from Transferencia clients (current month pagos === 'ok') ---
+  // Transfer income
   const transferMonthlyIncome = activeClients
     .filter(
       (c) =>
@@ -83,7 +99,7 @@ export function calculateKPIs(
     )
     .reduce((sum, c) => sum + (c.monto ?? 0), 0);
 
-  // --- Actual income from Boton de pago clients (current month pagos === 'ok') ---
+  // Boton de pago income
   const botonDePagoMonthlyIncome = activeClients
     .filter((c) => c.tipoPago === 'Boton de pago' && c.pagos?.[monthKey] === 'ok')
     .reduce((sum, c) => sum + (c.monto ?? 0), 0);
@@ -91,10 +107,11 @@ export function calculateKPIs(
   const actualMonthlyIncome =
     subscriptionMonthlyIncome + transferMonthlyIncome + botonDePagoMonthlyIncome;
 
-  // --- Al dia / Deudor ---
-  // Build set of emails with active Payku subscriptions for cross-reference
-  const activeSubEmails = new Set(
-    subscriptions.filter((s) => s.status === 'active').map((s) => s.client.email.toLowerCase()),
+  // Client al dia / deudor
+  const upToDateEmails = new Set(
+    activeSubs
+      .filter((s) => isSubscriptionUpToDate(s.paid))
+      .map((s) => s.client.email.toLowerCase()),
   );
 
   let clientsAlDia = 0;
@@ -102,16 +119,13 @@ export function calculateKPIs(
 
   for (const c of activeClients) {
     if (!PAYING_TYPES.includes(c.tipoPago)) continue;
-
     if (c.tipoPago === 'Suscripcion') {
-      // Use Payku subscription status as source of truth
-      if (activeSubEmails.has(c.correo.toLowerCase())) {
+      if (upToDateEmails.has(c.correo.toLowerCase())) {
         clientsAlDia++;
       } else {
         clientsDeudor++;
       }
     } else {
-      // Transferencia / Particular / Boton de pago: use pagos map for current month
       if (c.pagos?.[monthKey] === 'ok') {
         clientsAlDia++;
       } else {
@@ -120,15 +134,21 @@ export function calculateKPIs(
     }
   }
 
+  // Monto pendiente (historic debt)
+  const pendienteClients = activeClients.filter((c) => (c.montoPendiente ?? 0) > 0);
+  const totalMontoPendiente = pendienteClients.reduce((sum, c) => sum + (c.montoPendiente ?? 0), 0);
+
   return {
-    totalSubscriptions: subscriptions.length,
-    activeSubscriptions,
-    suspendedSubscriptions,
-    registeredSubscriptions,
-    cancelledSubscriptions,
+    totalSubscriptions:
+      statusCounts.active + statusCounts.suspended + statusCounts.cancel + statusCounts.delete,
+    activeSubscriptions: statusCounts.active,
+    suspendedSubscriptions: statusCounts.suspended,
+    cancelledSubscriptions: statusCounts.cancel,
+    deletedSubscriptions: statusCounts.delete,
+    subsAlDia,
+    subsAtrasados,
     expectedMonthlyIncome,
     actualMonthlyIncome,
-    expectedYearlyIncome: expectedMonthlyIncome * 12,
     subscriptionMonthlyIncome,
     transferMonthlyIncome,
     botonDePagoMonthlyIncome,
@@ -137,5 +157,7 @@ export function calculateKPIs(
     clientsDeudor,
     collectionRate:
       expectedMonthlyIncome > 0 ? (actualMonthlyIncome / expectedMonthlyIncome) * 100 : 0,
+    totalMontoPendiente,
+    clientsConPendiente: pendienteClients.length,
   };
 }

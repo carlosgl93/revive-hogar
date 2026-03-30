@@ -1,12 +1,8 @@
 import { createHash } from 'crypto';
 import * as admin from 'firebase-admin';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
-import { defineSecret } from 'firebase-functions/params';
 
 import { createPaykuClient } from './client';
-
-const PAYKU_PUBLIC_TOKEN = defineSecret('PAYKU_PUBLIC_TOKEN');
-const PAYKU_PRIVATE_TOKEN = defineSecret('PAYKU_PRIVATE_TOKEN');
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -64,12 +60,14 @@ export const scheduledSyncCurrentYear = onSchedule(
   {
     schedule: '0 10 * * *', // 10:00 UTC = ~6-7 AM Chile
     timeZone: 'America/Santiago',
-    secrets: [PAYKU_PUBLIC_TOKEN, PAYKU_PRIVATE_TOKEN],
     timeoutSeconds: 540,
   },
   async () => {
     const year = new Date().getFullYear();
-    const paykuClient = createPaykuClient(PAYKU_PUBLIC_TOKEN.value(), PAYKU_PRIVATE_TOKEN.value());
+    const pub = process.env.PAYKU_PUBLIC_TOKEN;
+    const priv = process.env.PAYKU_PRIVATE_TOKEN;
+    if (!pub || !priv) throw new Error('PAYKU_PUBLIC_TOKEN and PAYKU_PRIVATE_TOKEN must be set');
+    const paykuClient = createPaykuClient(pub, priv);
     const db = admin.firestore();
 
     // 1. Fetch all successful transactions for the current year

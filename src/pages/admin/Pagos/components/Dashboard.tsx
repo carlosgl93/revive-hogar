@@ -1,13 +1,14 @@
 import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
+import CancelIcon from '@mui/icons-material/Cancel';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CreditCardIcon from '@mui/icons-material/CreditCard';
-import ErrorIcon from '@mui/icons-material/Error';
+import DeleteIcon from '@mui/icons-material/Delete';
 import GroupIcon from '@mui/icons-material/Group';
-import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty';
 import PauseCircleIcon from '@mui/icons-material/PauseCircle';
 import PaymentIcon from '@mui/icons-material/Payment';
 import PercentIcon from '@mui/icons-material/Percent';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import { Box, Card, CardContent, Grid2, Skeleton, Stack, Tooltip, Typography } from '@mui/material';
 
 import { DashboardKPIs } from '../utils/kpis';
@@ -56,6 +57,7 @@ function formatCLP(amount: number): string {
 function Dashboard({ kpis, loading }: DashboardProps) {
   return (
     <Grid2 container spacing={2}>
+      {/* Subscription status counts */}
       <Grid2 size={{ xs: 6, sm: 4, md: 3 }}>
         <KpiCard
           title="Suscripciones Activas"
@@ -76,22 +78,44 @@ function Dashboard({ kpis, loading }: DashboardProps) {
       </Grid2>
       <Grid2 size={{ xs: 6, sm: 4, md: 3 }}>
         <KpiCard
-          title="En Registro"
-          value={kpis?.registeredSubscriptions ?? 0}
-          icon={<HourglassEmptyIcon />}
-          color="info.main"
+          title="Canceladas"
+          value={kpis?.cancelledSubscriptions ?? 0}
+          icon={<CancelIcon />}
+          color="error.main"
           loading={loading}
         />
       </Grid2>
       <Grid2 size={{ xs: 6, sm: 4, md: 3 }}>
         <KpiCard
-          title="Canceladas"
-          value={kpis?.cancelledSubscriptions ?? 0}
-          icon={<ErrorIcon />}
+          title="Eliminadas"
+          value={kpis?.deletedSubscriptions ?? 0}
+          icon={<DeleteIcon />}
+          color="text.secondary"
+          loading={loading}
+        />
+      </Grid2>
+
+      {/* Payment status */}
+      <Grid2 size={{ xs: 6, sm: 4, md: 3 }}>
+        <KpiCard
+          title="Suscripciones Al Dia"
+          value={kpis?.subsAlDia ?? 0}
+          icon={<CheckCircleIcon />}
+          color="success.main"
+          loading={loading}
+        />
+      </Grid2>
+      <Grid2 size={{ xs: 6, sm: 4, md: 3 }}>
+        <KpiCard
+          title="Suscripciones Atrasadas"
+          value={kpis?.subsAtrasados ?? 0}
+          icon={<WarningAmberIcon />}
           color="error.main"
           loading={loading}
         />
       </Grid2>
+
+      {/* Income */}
       <Grid2 size={{ xs: 6, sm: 4, md: 3 }}>
         <Tooltip
           title={
@@ -116,15 +140,6 @@ function Dashboard({ kpis, loading }: DashboardProps) {
         <KpiCard
           title="Ingreso Mensual Actual"
           value={kpis ? formatCLP(kpis.actualMonthlyIncome) : '$0'}
-          icon={<TrendingUpIcon />}
-          color="success.main"
-          loading={loading}
-        />
-      </Grid2>
-      <Grid2 size={{ xs: 6, sm: 4, md: 3 }}>
-        <KpiCard
-          title="Ingreso Anual Est."
-          value={kpis ? formatCLP(kpis.expectedYearlyIncome) : '$0'}
           icon={<TrendingUpIcon />}
           color="success.main"
           loading={loading}
@@ -157,6 +172,28 @@ function Dashboard({ kpis, loading }: DashboardProps) {
           loading={loading}
         />
       </Grid2>
+
+      {/* Monto pendiente */}
+      <Grid2 size={{ xs: 6, sm: 4, md: 3 }}>
+        <KpiCard
+          title="Clientes con Deuda"
+          value={kpis?.clientsConPendiente ?? 0}
+          icon={<WarningAmberIcon />}
+          color="warning.main"
+          loading={loading}
+        />
+      </Grid2>
+      <Grid2 size={{ xs: 6, sm: 4, md: 3 }}>
+        <KpiCard
+          title="Total Deuda Pendiente"
+          value={kpis ? formatCLP(kpis.totalMontoPendiente) : '$0'}
+          icon={<WarningAmberIcon />}
+          color="warning.main"
+          loading={loading}
+        />
+      </Grid2>
+
+      {/* Clients & Collection */}
       <Grid2 size={{ xs: 6, sm: 4, md: 3 }}>
         <KpiCard
           title="Clientes (Al dia / Deudor)"

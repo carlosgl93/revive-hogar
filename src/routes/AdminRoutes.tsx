@@ -10,6 +10,7 @@ const ImportarPage = asyncComponentLoader(() => import('@/pages/admin/Importar')
 const HistorialPagosPage = asyncComponentLoader(() => import('@/pages/admin/HistorialPagos'));
 const UsuariosPage = asyncComponentLoader(() => import('@/pages/admin/Usuarios'));
 const RutasPage = asyncComponentLoader(() => import('@/pages/admin/Rutas'));
+const PesajePage = asyncComponentLoader(() => import('@/pages/admin/Pesaje'));
 const NotFound = asyncComponentLoader(() => import('@/pages/NotFound'));
 
 function AdminRoutes() {
@@ -24,6 +25,7 @@ function AdminRoutes() {
           <Route path="importar" element={<ImportarPage />} />
           <Route path="usuarios" element={<UsuariosPage />} />
           <Route path="rutas" element={<RutasPage />} />
+          <Route path="pesaje" element={<PesajePage />} />
         </Route>
       </Route>
       <Route path="*" element={<NotFound />} />

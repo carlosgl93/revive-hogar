@@ -2,6 +2,7 @@ import HistoryIcon from '@mui/icons-material/History';
 import PaymentIcon from '@mui/icons-material/Payment';
 import PeopleIcon from '@mui/icons-material/People';
 import RouteIcon from '@mui/icons-material/Route';
+import ScaleIcon from '@mui/icons-material/Scale';
 import UploadIcon from '@mui/icons-material/Upload';
 
 import { AdminNavItem } from './types';
@@ -28,6 +29,12 @@ const adminNavItems: AdminNavItem[] = [
     path: '/admin/usuarios',
     title: 'Usuarios',
     icon: PeopleIcon,
+    roles: ['admin'],
+  },
+  {
+    path: '/admin/pesaje',
+    title: 'Pesaje',
+    icon: ScaleIcon,
     roles: ['admin'],
   },
   {

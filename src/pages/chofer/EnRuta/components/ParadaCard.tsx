@@ -69,9 +69,10 @@ const PROBLEMA_LABELS: Record<string, string> = {
   otro: 'Otro problema',
 };
 
-const PAYMENT_CHIP: Record<string, { label: string; color: 'error' | 'warning' }> = {
+const PAYMENT_CHIP: Record<string, { label: string; color: 'success' | 'error' | 'warning' }> = {
   atrasado: { label: 'Pago atrasado', color: 'error' },
   pendiente: { label: 'Pago pendiente', color: 'warning' },
+  ok: { label: 'Al dia', color: 'success' },
 };
 
 function ParadaCard({ retiro, paymentInfo, onComplete, onReportProblem, onClick }: Props) {
@@ -149,13 +150,16 @@ function ParadaCard({ retiro, paymentInfo, onComplete, onReportProblem, onClick 
             {retiro.estado === 'completado' && (
               <Chip label="Completado" color="success" size="small" />
             )}
-            {isOverdue && paymentInfo && PAYMENT_CHIP[paymentInfo.paymentStatus] && (
+            {paymentInfo && PAYMENT_CHIP[paymentInfo.paymentStatus] && (
               <Chip
                 label={PAYMENT_CHIP[paymentInfo.paymentStatus].label}
                 color={PAYMENT_CHIP[paymentInfo.paymentStatus].color}
                 size="small"
-                variant="outlined"
+                variant={paymentInfo.paymentStatus === 'ok' ? 'outlined' : 'filled'}
               />
+            )}
+            {paymentInfo?.paykuStatus === 'sin_suscripcion' && (
+              <Chip label="Sin suscripcion" size="small" variant="outlined" />
             )}
           </Stack>
         </Stack>
@@ -208,10 +212,10 @@ function ParadaCard({ retiro, paymentInfo, onComplete, onReportProblem, onClick 
               </Tooltip>
             </>
           )}
-          {isOverdue && (
-            <Tooltip title="Enviar link de pago" arrow>
+          {(isOverdue || paymentInfo?.paykuStatus === 'sin_suscripcion') && (
+            <Tooltip title={isOverdue ? 'Enviar link de pago' : 'Crear suscripcion'} arrow>
               <IconButton
-                color="error"
+                color={isOverdue ? 'error' : 'primary'}
                 onClick={(e) => setPayMenuAnchor(e.currentTarget)}
                 size="small"
                 disabled={creatingPayLink}
