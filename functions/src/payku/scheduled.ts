@@ -1,12 +1,9 @@
 import { createHash } from 'crypto';
 import * as admin from 'firebase-admin';
-import { onSchedule } from 'firebase-functions/v2/scheduler';
+import { Request, Response } from 'express';
 
+import { verifyFirebaseToken } from '../middleware';
 import { createPaykuClient } from './client';
-
-if (!admin.apps.length) {
-  admin.initializeApp();
-}
 
 interface PaykuTransactionItem {
   id: string;
@@ -55,22 +52,28 @@ function hashDireccion(direccion: string): string {
   return createHash('sha256').update(direccion.trim().toLowerCase()).digest('hex').slice(0, 40);
 }
 
-// Runs daily at 6:00 AM Chile time (UTC-3 / UTC-4 depending on DST)
-export const scheduledSyncCurrentYear = onSchedule(
-  {
-    schedule: '0 10 * * *', // 10:00 UTC = ~6-7 AM Chile
-    timeZone: 'America/Santiago',
-    timeoutSeconds: 540,
-  },
-  async () => {
-    const year = new Date().getFullYear();
-    const pub = process.env.PAYKU_PUBLIC_TOKEN;
-    const priv = process.env.PAYKU_PRIVATE_TOKEN;
-    if (!pub || !priv) throw new Error('PAYKU_PUBLIC_TOKEN and PAYKU_PRIVATE_TOKEN must be set');
-    const paykuClient = createPaykuClient(pub, priv);
-    const db = admin.firestore();
+// Converted from onSchedule('0 10 * * *') to HTTP endpoint.
+// Trigger manually via POST /api/scheduledSyncCurrentYear
+export async function syncCurrentYear(req: Request, res: Response): Promise<void> {
+  try {
+    await verifyFirebaseToken(req.headers.authorization);
+  } catch {
+    res.status(401).json({ error: 'Unauthenticated' });
+    return;
+  }
 
-    // 1. Fetch all successful transactions for the current year
+  const year = new Date().getFullYear();
+  const pub = process.env.PAYKU_PUBLIC_TOKEN;
+  const priv = process.env.PAYKU_PRIVATE_TOKEN;
+  if (!pub || !priv) {
+    res.status(500).json({ error: 'PAYKU_PUBLIC_TOKEN and PAYKU_PRIVATE_TOKEN must be set' });
+    return;
+  }
+
+  const paykuClient = createPaykuClient(pub, priv);
+  const db = admin.firestore();
+
+  try {
     const allTransactions: PaykuTransactionItem[] = [];
     let page = 1;
 
@@ -95,7 +98,6 @@ export const scheduledSyncCurrentYear = onSchedule(
       page++;
     }
 
-    // 2. Group by direccion
     const grouped = new Map<string, {
       direccion: string;
       email: string;
@@ -152,7 +154,6 @@ export const scheduledSyncCurrentYear = onSchedule(
       };
     }
 
-    // 3. Batch write to Firestore
     const historicCollection = db.collection('userHistoricPayments');
     let customersUpdated = 0;
 
@@ -201,5 +202,15 @@ export const scheduledSyncCurrentYear = onSchedule(
       `scheduledSyncCurrentYear: year=${year}, transactions=${allTransactions.length}, ` +
       `customers=${customersUpdated}, skipped=${skipped}`,
     );
-  },
-);
+
+    res.json({
+      year,
+      transactionsProcessed: allTransactions.length,
+      customersUpdated,
+      skipped,
+    });
+  } catch (error) {
+    console.error('syncCurrentYear failed:', error);
+    res.status(500).json({ error: 'Sync failed', details: String(error) });
+  }
+}

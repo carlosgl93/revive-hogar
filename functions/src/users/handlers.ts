@@ -1,9 +1,7 @@
 import * as admin from 'firebase-admin';
-import { HttpsError, onRequest } from 'firebase-functions/v2/https';
+import { Request, Response } from 'express';
 
 import { verifyFirebaseToken } from '../middleware';
-
-const REGION = 'southamerica-west1';
 
 interface CreateUserBody {
   email: string;
@@ -12,12 +10,7 @@ interface CreateUserBody {
   role: 'admin' | 'chofer';
 }
 
-export const createUsuario = onRequest({ region: REGION, cors: true }, async (req, res) => {
-  if (req.method !== 'POST') {
-    res.status(405).json({ error: 'Method not allowed' });
-    return;
-  }
-
+export async function createUsuario(req: Request, res: Response): Promise<void> {
   try {
     await verifyFirebaseToken(req.headers.authorization);
   } catch {
@@ -56,17 +49,12 @@ export const createUsuario = onRequest({ region: REGION, cors: true }, async (re
 
     res.json({ uid: userRecord.uid, email, nombre, role });
   } catch (err: unknown) {
-    const message = err instanceof HttpsError ? err.message : String(err);
+    const message = err instanceof Error ? err.message : String(err);
     res.status(500).json({ error: message });
   }
-});
+}
 
-export const deleteUsuario = onRequest({ region: REGION, cors: true }, async (req, res) => {
-  if (req.method !== 'DELETE') {
-    res.status(405).json({ error: 'Method not allowed' });
-    return;
-  }
-
+export async function deleteUsuario(req: Request, res: Response): Promise<void> {
   try {
     await verifyFirebaseToken(req.headers.authorization);
   } catch {
@@ -88,4 +76,4 @@ export const deleteUsuario = onRequest({ region: REGION, cors: true }, async (re
     const message = err instanceof Error ? err.message : String(err);
     res.status(500).json({ error: message });
   }
-});
+}

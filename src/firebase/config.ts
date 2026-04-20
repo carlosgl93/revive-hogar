@@ -16,7 +16,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
-export const functions = getFunctions(app, 'southamerica-west1');
+export const functions = getFunctions(app, 'us-central1');
 export const storage = getStorage(app);
 
 if (import.meta.env.VITE_ENV === 'dev') {
