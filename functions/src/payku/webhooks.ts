@@ -1,11 +1,7 @@
 import * as admin from 'firebase-admin';
-import { onRequest } from 'firebase-functions/v2/https';
+import { Request, Response } from 'express';
 
 import { PaykuSubscriptionWebhook, PaykuPaymentWebhook } from './types';
-
-if (!admin.apps.length) {
-  admin.initializeApp();
-}
 
 const SPANISH_MONTHS = [
   'enero',
@@ -35,14 +31,8 @@ function addMonths(date: Date, months: number): Date {
 }
 
 // ─── Webhook: Subscription Activation ───
-// Payku POSTs { id, status } when a subscription becomes active
 
-export const webhookSubscriptionActivation = onRequest(async (req, res) => {
-  if (req.method !== 'POST') {
-    res.status(405).json({ error: 'Method not allowed' });
-    return;
-  }
-
+export async function webhookSubscriptionActivation(req: Request, res: Response): Promise<void> {
   const { id, status } = req.body as PaykuSubscriptionWebhook;
 
   if (!id) {
@@ -53,14 +43,12 @@ export const webhookSubscriptionActivation = onRequest(async (req, res) => {
   const db = admin.firestore();
 
   try {
-    // Find client by paykuSubscriptionId
     let snapshot = await db
       .collection('clientes')
       .where('paykuSubscriptionId', '==', id)
       .limit(1)
       .get();
 
-    // Fallback: try matching by email from the Payku client field
     if (snapshot.empty && req.body.client) {
       const clientEmail = typeof req.body.client === 'string' ? req.body.client : req.body.client.email;
       if (clientEmail) {
@@ -70,7 +58,6 @@ export const webhookSubscriptionActivation = onRequest(async (req, res) => {
           .limit(1)
           .get();
 
-        // Auto-link the subscription ID so future lookups are direct
         if (!snapshot.empty) {
           await snapshot.docs[0].ref.update({ paykuSubscriptionId: id });
         }
@@ -84,7 +71,6 @@ export const webhookSubscriptionActivation = onRequest(async (req, res) => {
       });
     }
 
-    // Log the webhook event
     await db.collection('webhookLogs').add({
       type: 'subscription_activation',
       subscriptionId: id,
@@ -101,17 +87,11 @@ export const webhookSubscriptionActivation = onRequest(async (req, res) => {
     console.error('Webhook subscription activation error:', error);
     res.status(500).json({ error: 'Internal error processing webhook' });
   }
-});
+}
 
 // ─── Webhook: Payment Charge ───
-// Payku POSTs { transaction_id, verification_key, order, status, subscriptions: { id, client } }
 
-export const webhookPaymentCharge = onRequest(async (req, res) => {
-  if (req.method !== 'POST') {
-    res.status(405).json({ error: 'Method not allowed' });
-    return;
-  }
-
+export async function webhookPaymentCharge(req: Request, res: Response): Promise<void> {
   const payload = req.body as PaykuPaymentWebhook;
 
   if (!payload.subscriptions?.id) {
@@ -124,7 +104,6 @@ export const webhookPaymentCharge = onRequest(async (req, res) => {
   const monthKey = getSpanishMonthKey(now);
 
   try {
-    // Deduplicate: check if this transaction was already processed
     const existingLog = await db
       .collection('webhookLogs')
       .where('transactionId', '==', payload.transaction_id)
@@ -137,18 +116,14 @@ export const webhookPaymentCharge = onRequest(async (req, res) => {
       return;
     }
 
-    // Find client by paykuSubscriptionId
     let snapshot = await db
       .collection('clientes')
       .where('paykuSubscriptionId', '==', payload.subscriptions.id)
       .limit(1)
       .get();
 
-    // Fallback: try matching by Payku client email
     if (snapshot.empty && payload.subscriptions.client) {
-      // payload.subscriptions.client could be a Payku client ID or email
       const clientIdentifier = payload.subscriptions.client;
-      // Try as email first (contains @)
       if (clientIdentifier.includes('@')) {
         snapshot = await db
           .collection('clientes')
@@ -157,7 +132,6 @@ export const webhookPaymentCharge = onRequest(async (req, res) => {
           .get();
       }
 
-      // Auto-link the subscription ID so future lookups are direct
       if (!snapshot.empty) {
         await snapshot.docs[0].ref.update({ paykuSubscriptionId: payload.subscriptions.id });
       }
@@ -171,21 +145,18 @@ export const webhookPaymentCharge = onRequest(async (req, res) => {
       const clientDoc = snapshot.docs[0];
 
       if (payload.status === 'success') {
-        // Payment successful: mark month as 'ok', update cut date
         const nextCutDate = addMonths(now, 1);
         await clientDoc.ref.update({
           [`pagos.${monthKey}`]: 'ok',
           fechaCorte: nextCutDate.toISOString(),
         });
       } else {
-        // Payment failed: mark month as 'atrasado'
         await clientDoc.ref.update({
           [`pagos.${monthKey}`]: 'atrasado',
         });
       }
     }
 
-    // Log the webhook event
     await db.collection('webhookLogs').add({
       type: 'payment_charge',
       subscriptionId: payload.subscriptions.id,
@@ -202,4 +173,4 @@ export const webhookPaymentCharge = onRequest(async (req, res) => {
     console.error('Webhook payment charge error:', error);
     res.status(500).json({ error: 'Internal error processing webhook' });
   }
-});
+}

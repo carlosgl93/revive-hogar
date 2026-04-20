@@ -1,13 +1,11 @@
 import * as admin from 'firebase-admin';
-import { onSchedule } from 'firebase-functions/v2/scheduler';
+import { Request, Response } from 'express';
 import * as nodemailer from 'nodemailer';
+
+import { verifyFirebaseToken } from '../middleware';
 
 // Route ALL emails to this address until production-ready. Remove to send to real customers.
 const EMAIL_OVERRIDE = 'cgumucio93@gmail.com';
-
-if (!admin.apps.length) {
-  admin.initializeApp();
-}
 
 const DIAS_MAP: Record<number, string> = {
   1: 'Lunes',
@@ -35,44 +33,43 @@ interface OverdueClient {
   paykuSubscriptionUrl?: string;
 }
 
-/**
- * Runs at 8:00 AM Chile time (Mon-Sat).
- * Checks which clients on today's route have overdue/pending payments
- * for the current month and sends an email reminder with a payment link.
- */
-export const scheduledPaymentReminder = onSchedule(
-  {
-    schedule: '0 8 * * 1-6',
-    timeZone: 'America/Santiago',
-    timeoutSeconds: 120,
-  },
-  async () => {
-    const now = new Date();
-    const dia = DIAS_MAP[now.getDay()];
-    if (!dia) return;
+// Converted from onSchedule('0 8 * * 1-6') to HTTP endpoint.
+// Trigger manually via POST /api/scheduledPaymentReminder
+export async function sendPaymentReminder(req: Request, res: Response): Promise<void> {
+  try {
+    await verifyFirebaseToken(req.headers.authorization);
+  } catch {
+    res.status(401).json({ error: 'Unauthenticated' });
+    return;
+  }
 
-    const mesKey = `${MESES[now.getMonth()]} ${now.getFullYear()}`;
-    const db = admin.firestore();
+  const now = new Date();
+  const dia = DIAS_MAP[now.getDay()];
+  if (!dia) {
+    res.json({ message: 'No route scheduled for today (Sunday)', sent: 0, failed: 0 });
+    return;
+  }
 
-    // 1. Get route for today
+  const mesKey = `${MESES[now.getMonth()]} ${now.getFullYear()}`;
+  const db = admin.firestore();
+
+  try {
     const rutaSnap = await db.collection('rutas').doc(dia).get();
     if (!rutaSnap.exists) {
-      console.log(`[paymentReminder] No route found for ${dia}`);
+      res.json({ message: `No route found for ${dia}`, sent: 0, failed: 0 });
       return;
     }
 
     const paradas = (rutaSnap.data()?.paradas ?? []) as Parada[];
     if (paradas.length === 0) {
-      console.log(`[paymentReminder] Route ${dia} has no stops`);
+      res.json({ message: `Route ${dia} has no stops`, sent: 0, failed: 0 });
       return;
     }
 
-    // 2. Fetch client docs
     const clienteDocs = await Promise.all(
       paradas.map((p) => db.collection('clientes').doc(p.clienteId).get()),
     );
 
-    // 3. Filter overdue/pending clients
     const overdueClients: OverdueClient[] = [];
 
     for (const snap of clienteDocs) {
@@ -92,13 +89,10 @@ export const scheduledPaymentReminder = onSchedule(
     }
 
     if (overdueClients.length === 0) {
-      console.log(`[paymentReminder] No overdue clients for ${dia} (${mesKey})`);
+      res.json({ message: `No overdue clients for ${dia} (${mesKey})`, sent: 0, failed: 0 });
       return;
     }
 
-    console.log(`[paymentReminder] Found ${overdueClients.length} overdue clients for ${dia}`);
-
-    // 4. Send email reminders
     const smtpPort = parseInt(process.env.SMTP_PORT || '587', 10);
     const transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST || 'smtp.gmail.com',
@@ -138,7 +132,6 @@ export const scheduledPaymentReminder = onSchedule(
       }
     }
 
-    // 5. Log results
     await db.collection('notificationLogs').add({
       type: 'payment_reminder',
       dia,
@@ -149,6 +142,9 @@ export const scheduledPaymentReminder = onSchedule(
       createdAt: new Date().toISOString(),
     });
 
-    console.log(`[paymentReminder] sent=${sent}, failed=${failed}`);
-  },
-);
+    res.json({ dia, mesKey, totalOverdue: overdueClients.length, sent, failed });
+  } catch (error) {
+    console.error('sendPaymentReminder failed:', error);
+    res.status(500).json({ error: 'Payment reminder failed', details: String(error) });
+  }
+}
