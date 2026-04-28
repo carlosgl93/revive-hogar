@@ -1,5 +1,7 @@
 import { FormEvent, useState } from 'react';
 
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import {
   Alert,
   Button,
@@ -7,6 +9,8 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  IconButton,
+  InputAdornment,
   MenuItem,
   Stack,
   TextField,
@@ -31,6 +35,7 @@ function CreateUsuarioDialog({ open, onClose, onCreated }: Props) {
   const [role, setRole] = useState<UserRole>('chofer');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
 
   function reset() {
     setNombre('');
@@ -38,6 +43,7 @@ function CreateUsuarioDialog({ open, onClose, onCreated }: Props) {
     setPassword('');
     setRole('chofer');
     setError(null);
+    setShowPassword(false);
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -92,13 +98,31 @@ function CreateUsuarioDialog({ open, onClose, onCreated }: Props) {
             />
             <TextField
               label="Contrasena"
-              type="password"
+              type={showPassword ? 'text' : 'password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
               fullWidth
               inputProps={{ minLength: 6 }}
               helperText="Minimo 6 caracteres"
+              InputProps={{
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton
+                      size="small"
+                      onClick={() => setShowPassword((s) => !s)}
+                      edge="end"
+                      tabIndex={-1}
+                    >
+                      {showPassword ? (
+                        <VisibilityOffIcon fontSize="small" />
+                      ) : (
+                        <VisibilityIcon fontSize="small" />
+                      )}
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              }}
             />
             <TextField
               label="Rol"

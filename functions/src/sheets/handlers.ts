@@ -56,7 +56,9 @@ export async function importFromSheets(req: Request, res: Response): Promise<voi
     const headerIndex = buildHeaderIndex(headerRow);
     result.totalSheetRows = dataRows.length;
 
-    const clientesPorDia: Record<string, Array<{ id: string; nombre: string; direccion: string; comuna: string; telefono: string }>> = {};
+    type ParadaEntry = { id: string; nombre: string; direccion: string; comuna: string; telefono: string };
+    // dia -> movil -> paradas[]
+    const clientesPorDiaMovil: Record<string, Record<string, ParadaEntry[]>> = {};
 
     for (let i = 0; i < dataRows.length; i++) {
       const { cliente, error } = transformRow(dataRows[i], headerIndex, i + 1);
@@ -94,10 +96,12 @@ export async function importFromSheets(req: Request, res: Response): Promise<voi
 
       if (cliente.activo && cliente.dia) {
         const dia = normalizeDia(cliente.dia);
+        const movil = (cliente.movil ?? '').trim() || 'sin-asignar';
         if (dia) {
-          if (!clientesPorDia[dia]) clientesPorDia[dia] = [];
-          if (!clientesPorDia[dia].some((c) => c.id === clienteId)) {
-            clientesPorDia[dia].push({
+          if (!clientesPorDiaMovil[dia]) clientesPorDiaMovil[dia] = {};
+          if (!clientesPorDiaMovil[dia][movil]) clientesPorDiaMovil[dia][movil] = [];
+          if (!clientesPorDiaMovil[dia][movil].some((c) => c.id === clienteId)) {
+            clientesPorDiaMovil[dia][movil].push({
               id: clienteId,
               nombre: cliente.nombre,
               direccion: cliente.direccion,
@@ -109,25 +113,29 @@ export async function importFromSheets(req: Request, res: Response): Promise<voi
       }
     }
 
-    for (const [dia, clientes] of Object.entries(clientesPorDia)) {
-      const rutaRef = db.collection('rutas').doc(dia);
-      const existingRuta = await rutaRef.get();
+    for (const [dia, porMovil] of Object.entries(clientesPorDiaMovil)) {
+      for (const [movil, clientes] of Object.entries(porMovil)) {
+        const safeMovil = movil.replace(/[^a-zA-Z0-9\-_]/g, '_');
+        const docId = `${dia}-${safeMovil}`;
+        const rutaRef = db.collection('rutas').doc(docId);
+        const existingRuta = await rutaRef.get();
 
-      const paradas = clientes.map((c, idx) => ({
-        clienteId: c.id,
-        orden: idx + 1,
-        nombre: c.nombre,
-        direccion: c.direccion,
-        comuna: c.comuna,
-        telefono: c.telefono,
-      }));
+        const paradas = clientes.map((c, idx) => ({
+          clienteId: c.id,
+          orden: idx + 1,
+          nombre: c.nombre,
+          direccion: c.direccion,
+          comuna: c.comuna,
+          telefono: c.telefono,
+        }));
 
-      if (existingRuta.exists) {
-        await rutaRef.set({ paradas }, { merge: true });
-      } else {
-        await rutaRef.set({ dia, paradas });
+        if (existingRuta.exists) {
+          await rutaRef.set({ paradas, movil }, { merge: true });
+        } else {
+          await rutaRef.set({ dia, movil, paradas });
+        }
+        result.rutasCreated++;
       }
-      result.rutasCreated++;
     }
 
     console.log(`[import] Sheet rows: ${result.totalSheetRows}, created: ${result.created}, updated: ${result.updated}, skipped: ${result.skipped}, errors: ${result.errors.length}, empty: ${result.emptyRows}, rutas: ${result.rutasCreated}`);

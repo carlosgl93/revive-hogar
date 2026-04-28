@@ -112,6 +112,7 @@ export interface Parada {
 export interface Ruta {
   id?: string;
   dia: string;
+  movil?: string;
   choferUid?: string;
   choferNombre?: string;
   paradas: Parada[];

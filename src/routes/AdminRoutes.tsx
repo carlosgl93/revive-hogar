@@ -11,6 +11,7 @@ const HistorialPagosPage = asyncComponentLoader(() => import('@/pages/admin/Hist
 const UsuariosPage = asyncComponentLoader(() => import('@/pages/admin/Usuarios'));
 const RutasPage = asyncComponentLoader(() => import('@/pages/admin/Rutas'));
 const PesajePage = asyncComponentLoader(() => import('@/pages/admin/Pesaje'));
+const RetirosPage = asyncComponentLoader(() => import('@/pages/admin/Retiros'));
 const NotFound = asyncComponentLoader(() => import('@/pages/NotFound'));
 
 function AdminRoutes() {
@@ -26,6 +27,7 @@ function AdminRoutes() {
           <Route path="usuarios" element={<UsuariosPage />} />
           <Route path="rutas" element={<RutasPage />} />
           <Route path="pesaje" element={<PesajePage />} />
+          <Route path="retiros" element={<RetirosPage />} />
         </Route>
       </Route>
       <Route path="*" element={<NotFound />} />

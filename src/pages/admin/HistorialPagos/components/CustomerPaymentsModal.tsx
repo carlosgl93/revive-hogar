@@ -25,12 +25,12 @@ import {
 } from '@mui/material';
 
 import { paykuSubscriptionsApi } from '@/api/paykuSubscriptions';
-import { HistoricPayment, UserHistoricPayments } from '@/types/payku';
+import { HistoricPayment } from '@/types/payku';
 
-type HistoricRow = UserHistoricPayments & { id: string; isPending: boolean };
+import { MergedClientRow } from '../hooks/useHistoricPayments';
 
 interface CustomerPaymentsModalProps {
-  customer: HistoricRow | null;
+  customer: MergedClientRow | null;
   open: boolean;
   onClose: () => void;
   onToggleSettled: (docId: string, currentlySettled: boolean) => void;
@@ -111,19 +111,19 @@ function CustomerPaymentsModal({
             <Typography variant="caption" color="text.secondary">
               Email
             </Typography>
-            <Typography variant="body2">{customer.email || '-'}</Typography>
+            <Typography variant="body2">{customer.correo || '-'}</Typography>
           </Grid2>
           <Grid2 size={{ xs: 6, sm: 3 }}>
             <Typography variant="caption" color="text.secondary">
               Nombre
             </Typography>
-            <Typography variant="body2">{customer.fullName || '-'}</Typography>
+            <Typography variant="body2">{customer.nombre || '-'}</Typography>
           </Grid2>
           <Grid2 size={{ xs: 6, sm: 3 }}>
             <Typography variant="caption" color="text.secondary">
               Telefono
             </Typography>
-            <Typography variant="body2">{customer.phone || '-'}</Typography>
+            <Typography variant="body2">{customer.telefono || '-'}</Typography>
           </Grid2>
           <Grid2 size={{ xs: 6, sm: 3 }}>
             <Typography variant="caption" color="text.secondary">
@@ -174,9 +174,11 @@ function CustomerPaymentsModal({
           </Grid2>
           <Grid2 size={{ xs: 6, sm: 3 }}>
             <Typography variant="caption" color="text.secondary">
-              Anos sincronizados
+              Monto mensual
             </Typography>
-            <Typography variant="body2">{customer.syncedYears.join(', ')}</Typography>
+            <Typography variant="body2" fontWeight={600}>
+              {customer.monto > 0 ? `$${customer.monto.toLocaleString('es-CL')}` : '-'}
+            </Typography>
           </Grid2>
         </Grid2>
 

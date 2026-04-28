@@ -1,4 +1,5 @@
 import HistoryIcon from '@mui/icons-material/History';
+import LocalShippingIcon from '@mui/icons-material/LocalShipping';
 import PaymentIcon from '@mui/icons-material/Payment';
 import PeopleIcon from '@mui/icons-material/People';
 import RouteIcon from '@mui/icons-material/Route';
@@ -35,6 +36,12 @@ const adminNavItems: AdminNavItem[] = [
     path: '/admin/pesaje',
     title: 'Pesaje',
     icon: ScaleIcon,
+    roles: ['admin'],
+  },
+  {
+    path: '/admin/retiros',
+    title: 'Retiros',
+    icon: LocalShippingIcon,
     roles: ['admin'],
   },
   {

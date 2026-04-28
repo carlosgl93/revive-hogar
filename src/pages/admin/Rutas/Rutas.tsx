@@ -7,6 +7,8 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import SaveIcon from '@mui/icons-material/Save';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import {
   Accordion,
   AccordionDetails,
@@ -17,6 +19,7 @@ import {
   CircularProgress,
   FormControl,
   IconButton,
+  InputAdornment,
   InputLabel,
   List,
   ListItem,
@@ -124,6 +127,7 @@ function Rutas() {
   const notifications = useNotifications();
 
   const [selectedDia, setSelectedDia] = useState(0);
+  const [selectedRutaId, setSelectedRutaId] = useState<string | null>(null);
   const [localParadas, setLocalParadas] = useState<Parada[]>([]);
   const [choferUid, setChoferUid] = useState('');
   const [saving, setSaving] = useState(false);
@@ -138,8 +142,17 @@ function Rutas() {
   const [newChoferPassword, setNewChoferPassword] = useState('');
   const [creatingChofer, setCreatingChofer] = useState(false);
   const [deletingUid, setDeletingUid] = useState<string | null>(null);
+  const [showChoferPassword, setShowChoferPassword] = useState(false);
 
   const dia = DIAS[selectedDia];
+
+  const rutasDelDia = useMemo(
+    () =>
+      rutas
+        .filter((r) => r.dia === dia)
+        .sort((a, b) => (a.movil ?? '').localeCompare(b.movil ?? '')),
+    [rutas, dia],
+  );
 
   const choferes = useMemo(
     () => usuarios.filter((u) => u.role === 'chofer' && u.activo),
@@ -193,11 +206,19 @@ function Rutas() {
     }
   }
 
-  // Reset local state when the selected day changes or rutas load
+  // Reset selected ruta when day changes
   useEffect(() => {
-    const ruta = rutas.find((r) => r.dia === dia);
+    setSelectedRutaId(null);
+    setLocalParadas([]);
+    setChoferUid('');
+    setDirty(false);
+  }, [dia]);
+
+  // Load local state when a ruta is selected
+  useEffect(() => {
+    if (!selectedRutaId) return;
+    const ruta = rutas.find((r) => r.id === selectedRutaId);
     if (ruta) {
-      // Deduplicate paradas by clienteId (in case of corrupted data)
       const seen = new Set<string>();
       const deduped = [...ruta.paradas]
         .sort((a, b) => a.orden - b.orden)
@@ -209,14 +230,9 @@ function Rutas() {
         .map((p, i) => ({ ...p, orden: i + 1 }));
       setLocalParadas(deduped);
       setChoferUid(ruta.choferUid ?? '');
-      // Mark dirty if duplicates were removed so user can save the fix
       setDirty(deduped.length < ruta.paradas.length);
-    } else {
-      setLocalParadas([]);
-      setChoferUid('');
-      setDirty(false);
     }
-  }, [dia, rutasLoading]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectedRutaId, rutasLoading]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const availableClients = useMemo(() => {
     const usedIds = new Set(localParadas.map((p) => p.clienteId));
@@ -251,19 +267,20 @@ function Rutas() {
   }
 
   async function handleSave() {
+    if (!selectedRutaId) return;
     setSaving(true);
     try {
+      const selectedRuta = rutas.find((r) => r.id === selectedRutaId);
       const choferNombre = choferes.find((c) => c.uid === choferUid)?.nombre ?? '';
       const rutaData: Omit<Ruta, 'id'> = {
         dia,
+        movil: selectedRuta?.movil,
         choferUid: choferUid || undefined,
         choferNombre: choferNombre || undefined,
         paradas: localParadas,
       };
 
-      const existingRuta = rutas.find((r) => r.dia === dia);
-      const rutaId = existingRuta?.id ?? dia;
-      await setDoc(doc(db, 'rutas', rutaId), rutaData);
+      await setDoc(doc(db, 'rutas', selectedRutaId), rutaData);
 
       notifications.show(`Ruta del ${dia} guardada`, {
         severity: 'success',
@@ -284,7 +301,7 @@ function Rutas() {
       const batch = writeBatch(db);
 
       // Remove parada from source day's route
-      const sourceRuta = rutas.find((r) => r.dia === dia);
+      const sourceRuta = rutas.find((r) => r.id === selectedRutaId);
       if (sourceRuta?.id) {
         const updatedSource = sourceRuta.paradas
           .filter((p) => p.clienteId !== cambiarDiaTarget.clienteId)
@@ -410,9 +427,27 @@ function Rutas() {
               <TextField
                 label="Contraseña"
                 size="small"
-                type="password"
+                type={showChoferPassword ? 'text' : 'password'}
                 value={newChoferPassword}
                 onChange={(e) => setNewChoferPassword(e.target.value)}
+                InputProps={{
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton
+                        size="small"
+                        onClick={() => setShowChoferPassword((s) => !s)}
+                        edge="end"
+                        tabIndex={-1}
+                      >
+                        {showChoferPassword ? (
+                          <VisibilityOffIcon fontSize="small" />
+                        ) : (
+                          <VisibilityIcon fontSize="small" />
+                        )}
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                }}
               />
               <Button
                 variant="contained"
@@ -447,71 +482,97 @@ function Rutas() {
         ))}
       </Tabs>
 
-      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="flex-start">
-        <FormControl sx={{ minWidth: 200 }}>
-          <InputLabel>Chofer asignado</InputLabel>
-          <Select
-            value={choferUid}
-            onChange={(e) => {
-              setChoferUid(e.target.value);
-              setDirty(true);
-            }}
-            label="Chofer asignado"
-          >
-            <MenuItem value="">Sin asignar</MenuItem>
-            {choferes.map((c) => (
-              <MenuItem key={c.uid} value={c.uid}>
-                {c.nombre}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-
-        <Button variant="outlined" startIcon={<AddIcon />} onClick={() => setAddOpen(true)}>
-          Agregar cliente
-        </Button>
-
-        <Button
-          variant="contained"
-          startIcon={<SaveIcon />}
-          onClick={handleSave}
-          disabled={saving || !dirty}
-        >
-          {saving ? 'Guardando...' : 'Guardar'}
-        </Button>
-      </Stack>
-
-      {localParadas.length === 0 ? (
+      {/* Movil selector for the day */}
+      {rutasDelDia.length === 0 ? (
         <Paper sx={{ p: 3, textAlign: 'center' }}>
           <Typography color="text.secondary">
-            No hay paradas definidas para el {dia}. Agrega clientes para armar la ruta.
+            No hay rutas definidas para el {dia}. Importa el Excel para generar rutas.
           </Typography>
         </Paper>
       ) : (
-        <Paper>
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragEnd={handleDragEnd}
-          >
-            <SortableContext
-              items={localParadas.map((p) => p.clienteId)}
-              strategy={verticalListSortingStrategy}
-            >
-              <List disablePadding>
-                {localParadas.map((parada, index) => (
-                  <SortableParadaItem
-                    key={parada.clienteId}
-                    parada={parada}
-                    index={index}
-                    onCambiarDia={setCambiarDiaTarget}
-                    onRemove={handleRemove}
-                  />
-                ))}
-              </List>
-            </SortableContext>
-          </DndContext>
-        </Paper>
+        <>
+          <Stack direction="row" spacing={1} flexWrap="wrap">
+            {rutasDelDia.map((ruta) => (
+              <Chip
+                key={ruta.id}
+                label={`${ruta.movil ?? 'Sin movil'} (${ruta.paradas.length} paradas)`}
+                onClick={() => setSelectedRutaId(ruta.id ?? null)}
+                color={selectedRutaId === ruta.id ? 'primary' : 'default'}
+                variant={selectedRutaId === ruta.id ? 'filled' : 'outlined'}
+                sx={{ mb: 1 }}
+              />
+            ))}
+          </Stack>
+
+          {selectedRutaId && (
+            <>
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="flex-start">
+                <FormControl sx={{ minWidth: 200 }}>
+                  <InputLabel>Chofer asignado</InputLabel>
+                  <Select
+                    value={choferUid}
+                    onChange={(e) => {
+                      setChoferUid(e.target.value);
+                      setDirty(true);
+                    }}
+                    label="Chofer asignado"
+                  >
+                    <MenuItem value="">Sin asignar</MenuItem>
+                    {choferes.map((c) => (
+                      <MenuItem key={c.uid} value={c.uid}>
+                        {c.nombre}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+
+                <Button variant="outlined" startIcon={<AddIcon />} onClick={() => setAddOpen(true)}>
+                  Agregar cliente
+                </Button>
+
+                <Button
+                  variant="contained"
+                  startIcon={<SaveIcon />}
+                  onClick={handleSave}
+                  disabled={saving || !dirty}
+                >
+                  {saving ? 'Guardando...' : 'Guardar'}
+                </Button>
+              </Stack>
+
+              {localParadas.length === 0 ? (
+                <Paper sx={{ p: 3, textAlign: 'center' }}>
+                  <Typography color="text.secondary">No hay paradas en esta ruta.</Typography>
+                </Paper>
+              ) : (
+                <Paper>
+                  <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    onDragEnd={handleDragEnd}
+                  >
+                    <SortableContext
+                      items={localParadas.map((p) => p.clienteId)}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      <List disablePadding>
+                        {localParadas.map((parada, index) => (
+                          <SortableParadaItem
+                            key={parada.clienteId}
+                            parada={parada}
+                            index={index}
+                            onCambiarDia={setCambiarDiaTarget}
+                            onRemove={handleRemove}
+                          />
+                        ))}
+                      </List>
+                    </SortableContext>
+                  </DndContext>
+                </Paper>
+              )}
+            </>
+          )}
+        </>
       )}
 
       <AddClienteDialog

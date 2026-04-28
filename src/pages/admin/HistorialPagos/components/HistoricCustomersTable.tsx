@@ -4,14 +4,12 @@ import UndoIcon from '@mui/icons-material/Undo';
 import { Chip, IconButton, Stack, Tooltip } from '@mui/material';
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
 
-import { HistoricPayment, UserHistoricPayments } from '@/types/payku';
-
-type HistoricRow = UserHistoricPayments & { id: string; isPending: boolean };
+import { MergedClientRow } from '../hooks/useHistoricPayments';
 
 interface HistoricCustomersTableProps {
-  customers: HistoricRow[];
+  customers: MergedClientRow[];
   loading: boolean;
-  onViewDetail: (customer: HistoricRow) => void;
+  onViewDetail: (customer: MergedClientRow) => void;
   onToggleSettled: (docId: string, currentlySettled: boolean) => void;
 }
 
@@ -24,84 +22,70 @@ function formatDate(dateStr: string | null) {
   return new Date(dateStr).toLocaleDateString('es-CL');
 }
 
-function getMainType(payments: Record<string, HistoricPayment>): string {
-  const values = Object.values(payments);
-  const subCount = values.filter((p) => p.type === 'subscription').length;
-  const btnCount = values.filter((p) => p.type === 'boton_de_pago').length;
-  if (subCount > 0 && btnCount > 0) return 'Mixto';
-  if (subCount > 0) return 'Suscripcion';
-  return 'Boton de pago';
-}
-
-function getLastAmount(payments: Record<string, HistoricPayment>): number {
-  const sorted = Object.values(payments).sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-  );
-  return sorted[0]?.amount ?? 0;
-}
-
 function HistoricCustomersTable({
   customers,
   loading,
   onViewDetail,
   onToggleSettled,
 }: HistoricCustomersTableProps) {
-  const columns: GridColDef<HistoricRow>[] = [
+  const columns: GridColDef<MergedClientRow>[] = [
+    {
+      field: 'nombre',
+      headerName: 'Nombre',
+      flex: 1,
+      minWidth: 140,
+    },
     {
       field: 'direccion',
       headerName: 'Direccion',
       flex: 1.5,
-      minWidth: 200,
+      minWidth: 180,
     },
     {
-      field: 'email',
+      field: 'correo',
       headerName: 'Email',
       flex: 1,
       minWidth: 180,
     },
     {
-      field: 'fullName',
-      headerName: 'Nombre',
-      flex: 1,
-      minWidth: 140,
-      renderCell: ({ value }) => (value as string) || '-',
+      field: 'monto',
+      headerName: 'Monto',
+      width: 110,
+      align: 'right',
+      headerAlign: 'right',
+      renderCell: ({ value }) => ((value as number) > 0 ? formatCLP(value as number) : '-'),
+    },
+    {
+      field: 'montoPendiente',
+      headerName: 'Pendiente',
+      width: 110,
+      align: 'right',
+      headerAlign: 'right',
+      renderCell: ({ value }) =>
+        (value as number) > 0 ? (
+          <Chip label={formatCLP(value as number)} size="small" color="error" variant="outlined" />
+        ) : (
+          '-'
+        ),
     },
     {
       field: 'lastPaymentDate',
       headerName: 'Ultimo Pago',
       width: 120,
-      renderCell: ({ value }) => formatDate(value as string),
+      renderCell: ({ value }) => formatDate(value as string | null),
     },
     {
       field: 'totalPayments',
-      headerName: 'Total Pagos',
-      width: 100,
+      headerName: 'N° Pagos',
+      width: 90,
       align: 'center',
       headerAlign: 'center',
-    },
-    {
-      field: 'lastAmount',
-      headerName: 'Ultimo Monto',
-      width: 120,
-      align: 'right',
-      headerAlign: 'right',
-      valueGetter: (_value, row) => getLastAmount(row.payments),
-      renderCell: ({ value }) => ((value as number) > 0 ? formatCLP(value as number) : '-'),
-    },
-    {
-      field: 'tipo',
-      headerName: 'Tipo',
-      width: 120,
-      valueGetter: (_value, row) => getMainType(row.payments),
-      renderCell: ({ value }) => {
-        const color = value === 'Suscripcion' ? 'info' : value === 'Mixto' ? 'warning' : 'default';
-        return <Chip label={value as string} size="small" color={color} />;
-      },
+      renderCell: ({ value }) => ((value as number) > 0 ? value : '-'),
     },
     {
       field: 'estado',
       headerName: 'Estado',
-      width: 140,
+      width: 130,
       valueGetter: (_value, row) => {
         if (row.manuallySettled) return 'Saldado';
         return row.isPending ? 'Pendiente' : 'Al dia';
@@ -122,18 +106,20 @@ function HistoricCustomersTable({
     {
       field: 'actions',
       headerName: 'Acciones',
-      width: 110,
+      width: 100,
       align: 'center',
       headerAlign: 'center',
       sortable: false,
       filterable: false,
       renderCell: ({ row }) => (
         <Stack direction="row" spacing={0}>
-          <Tooltip title="Ver pagos del cliente" arrow>
-            <IconButton size="small" color="primary" onClick={() => onViewDetail(row)}>
-              <InfoOutlinedIcon />
-            </IconButton>
-          </Tooltip>
+          {row.hasHistoric && (
+            <Tooltip title="Ver pagos del cliente" arrow>
+              <IconButton size="small" color="primary" onClick={() => onViewDetail(row)}>
+                <InfoOutlinedIcon />
+              </IconButton>
+            </Tooltip>
+          )}
           {row.isPending ? (
             <Tooltip title="Marcar como saldado" arrow>
               <IconButton

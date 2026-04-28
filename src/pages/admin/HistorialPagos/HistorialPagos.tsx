@@ -21,13 +21,11 @@ import {
 } from '@mui/material';
 
 import { paykuHistoricApi } from '@/api/paykuHistoric';
-import { SyncHistoricPaymentsResponse, UserHistoricPayments } from '@/types/payku';
+import { SyncHistoricPaymentsResponse } from '@/types/payku';
 
 import CustomerPaymentsModal from './components/CustomerPaymentsModal';
 import HistoricCustomersTable from './components/HistoricCustomersTable';
-import { PaymentFilter, useHistoricPayments } from './hooks/useHistoricPayments';
-
-type HistoricRow = UserHistoricPayments & { id: string; isPending: boolean };
+import { MergedClientRow, PaymentFilter, useHistoricPayments } from './hooks/useHistoricPayments';
 
 function getYearOptions(): number[] {
   const currentYear = new Date().getFullYear();
@@ -58,7 +56,7 @@ function HistorialPagos() {
   const [syncError, setSyncError] = useState<string | null>(null);
 
   // Detail modal
-  const [selectedCustomer, setSelectedCustomer] = useState<HistoricRow | null>(null);
+  const [selectedCustomer, setSelectedCustomer] = useState<MergedClientRow | null>(null);
 
   const handleSync = useCallback(async () => {
     setSyncing(true);

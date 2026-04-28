@@ -27,21 +27,52 @@ import { Pesaje } from '@/types/models';
 
 type Period = 'dia' | 'semana' | 'mes';
 
+const CHILE_TZ = 'America/Santiago';
+
+function toChileDate(d: Date): string {
+  return d.toLocaleDateString('sv-SE', { timeZone: CHILE_TZ });
+}
+
+function formatFecha(dateStr: string): string {
+  const [y, m, d] = dateStr.split('-');
+  return `${d}-${m}-${y}`;
+}
+
 function getDateRange(period: Period): { start: string; end: string; label: string } {
   const now = new Date();
-  const end = now.toISOString().split('T')[0];
+  const end = toChileDate(now);
 
   if (period === 'dia') {
     return { start: end, end, label: 'Hoy' };
   }
   if (period === 'semana') {
     const weekStart = new Date(now);
-    weekStart.setDate(now.getDate() - now.getDay() + 1); // Monday
-    return { start: weekStart.toISOString().split('T')[0], end, label: 'Esta semana' };
+    const dowStr = new Intl.DateTimeFormat('en-US', {
+      timeZone: CHILE_TZ,
+      weekday: 'short',
+    }).format(now);
+    const dowMap: Record<string, number> = {
+      Sun: 0,
+      Mon: 1,
+      Tue: 2,
+      Wed: 3,
+      Thu: 4,
+      Fri: 5,
+      Sat: 6,
+    };
+    const dow = dowMap[dowStr] ?? 0;
+    weekStart.setDate(now.getDate() - ((dow + 6) % 7)); // Monday
+    return { start: toChileDate(weekStart), end, label: 'Esta semana' };
   }
   // mes
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  return { start: monthStart.toISOString().split('T')[0], end, label: 'Este mes' };
+  const year = parseInt(
+    new Intl.DateTimeFormat('en-US', { timeZone: CHILE_TZ, year: 'numeric' }).format(now),
+  );
+  const month = parseInt(
+    new Intl.DateTimeFormat('en-US', { timeZone: CHILE_TZ, month: 'numeric' }).format(now),
+  );
+  const monthStart = new Date(year, month - 1, 1);
+  return { start: toChileDate(monthStart), end, label: 'Este mes' };
 }
 
 function formatKg(kg: number): string {
@@ -116,7 +147,12 @@ function Pesajes() {
   }, [pesajes]);
 
   const columns: GridColDef<Pesaje>[] = [
-    { field: 'fecha', headerName: 'Fecha', width: 110 },
+    {
+      field: 'fecha',
+      headerName: 'Fecha',
+      width: 110,
+      renderCell: ({ value }) => formatFecha(value as string),
+    },
     { field: 'choferNombre', headerName: 'Chofer', flex: 1, minWidth: 120 },
     {
       field: 'vidrio',
@@ -272,7 +308,7 @@ function Pesajes() {
                       </Box>
                       <CardContent sx={{ py: 1, '&:last-child': { pb: 1 } }}>
                         <Typography variant="caption" color="text.secondary">
-                          {p.fecha} — {p.choferNombre}
+                          {formatFecha(p.fecha)} — {p.choferNombre}
                         </Typography>
                         <Typography variant="body2" fontWeight={600}>
                           {formatKg(p.totalKg)}

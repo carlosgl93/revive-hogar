@@ -8,7 +8,8 @@ import {
   Chip,
   LinearProgress,
   Stack,
-  TextField,
+  Tab,
+  Tabs,
   Typography,
 } from '@mui/material';
 
@@ -28,15 +29,7 @@ import ParadaDetailDialog from './components/ParadaDetailDialog';
 import PesajeForm from './components/PesajeForm';
 import ReportarProblemaDialog from './components/ReportarProblemaDialog';
 
-const DIAS_MAP: Record<number, string> = {
-  1: 'Lunes',
-  2: 'Martes',
-  3: 'Miercoles',
-  4: 'Jueves',
-  5: 'Viernes',
-  6: 'Sabado',
-  0: 'Domingo',
-};
+const CHILE_TZ = 'America/Santiago';
 
 const MESES = [
   'enero',
@@ -53,29 +46,43 @@ const MESES = [
   'diciembre',
 ];
 
-// Debug: overrideable current date for testing
-let debugDate: Date | null = null;
-
-function getNow() {
-  return debugDate ? new Date(debugDate) : new Date();
+function getHoy(): string {
+  return new Date().toLocaleDateString('sv-SE', { timeZone: CHILE_TZ });
 }
 
-function getHoy() {
-  return getNow().toISOString().split('T')[0];
-}
-
-function getDiaNombre() {
-  return DIAS_MAP[getNow().getDay()] ?? '';
+function getDiaNombre(): string {
+  const day = new Intl.DateTimeFormat('en-US', {
+    timeZone: CHILE_TZ,
+    weekday: 'short',
+  }).format(new Date());
+  const map: Record<string, string> = {
+    Mon: 'Lunes',
+    Tue: 'Martes',
+    Wed: 'Miercoles',
+    Thu: 'Jueves',
+    Fri: 'Viernes',
+    Sat: 'Sabado',
+    Sun: 'Domingo',
+  };
+  return map[day] ?? '';
 }
 
 function getMesKey(): string {
-  const now = getNow();
-  return `${MESES[now.getMonth()]} ${now.getFullYear()}`;
+  const now = new Date();
+  const month = parseInt(
+    new Intl.DateTimeFormat('en-US', { timeZone: CHILE_TZ, month: 'numeric' }).format(now),
+  );
+  const year = new Intl.DateTimeFormat('en-US', {
+    timeZone: CHILE_TZ,
+    year: 'numeric',
+  }).format(now);
+  return `${MESES[month - 1]} ${year}`;
 }
+
+type RetiroTab = 'pendientes' | 'completadas' | 'problemas';
 
 export interface ClientePaymentInfo {
   paymentStatus: PaymentStatus;
-  /** Payku subscription-based status: overrides paymentStatus when available */
   paykuStatus: 'al_dia' | 'atrasado' | 'sin_suscripcion';
   paykuSubscriptionUrl?: string;
   paykuSubscriptionId?: string;
@@ -91,18 +98,7 @@ function EnRuta() {
   const { subscriptions, loading: subsLoading } = usePaykuSubscriptionsV3();
   const notifications = useNotifications();
 
-  const [debugDateStr, setDebugDateStr] = useState<string>('');
-
-  // Update debug date when user changes it
-  const handleDebugDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
-    setDebugDateStr(val);
-    if (val) {
-      debugDate = new Date(val + 'T00:00:00');
-    } else {
-      debugDate = null;
-    }
-  };
+  const [tab, setTab] = useState<RetiroTab>('pendientes');
 
   const fecha = getHoy();
   const diaNombre = getDiaNombre();
@@ -120,14 +116,11 @@ function EnRuta() {
     [rutas, diaNombre, choferUid],
   );
 
-  // Build email -> subscription lookup from Payku data
   const subsByEmail = useMemo(() => {
     const map = new Map<string, (typeof subscriptions)[number]>();
-    // Only consider active subscriptions for payment status
     for (const sub of subscriptions) {
       if (sub.status === 'active') {
         const email = sub.client.email.toLowerCase();
-        // Keep the one with the most recent payment
         if (!map.has(email)) {
           map.set(email, sub);
         }
@@ -136,7 +129,6 @@ function EnRuta() {
     return map;
   }, [subscriptions]);
 
-  // Build a map of clienteId -> payment info combining internal + Payku data
   const clientPaymentMap = useMemo(() => {
     const mesKey = getMesKey();
     const map = new Map<string, ClientePaymentInfo>();
@@ -150,7 +142,6 @@ function EnRuta() {
         paykuStatus = isSubscriptionUpToDate(paykuSub.paid) ? 'al_dia' : 'atrasado';
       }
 
-      // If client has a Payku subscription, use that as source of truth for payment status
       let effectiveStatus = internalStatus;
       if (paykuSub) {
         effectiveStatus = paykuStatus === 'al_dia' ? 'ok' : 'atrasado';
@@ -169,7 +160,6 @@ function EnRuta() {
     return map;
   }, [clients, subsByEmail]);
 
-  // Build a map of clienteId -> full Cliente for the detail dialog
   const clientMap = useMemo(() => {
     const map = new Map<string, Cliente>();
     for (const c of clients) {
@@ -180,8 +170,15 @@ function EnRuta() {
 
   const completados = retiros.filter((r) => r.estado === 'completado').length;
   const problemas = retiros.filter((r) => r.estado === 'problema').length;
+  const pendientes = retiros.filter((r) => r.estado === 'pendiente').length;
   const total = retiros.length;
   const progreso = total > 0 ? ((completados + problemas) / total) * 100 : 0;
+
+  const retirosFiltered = useMemo(() => {
+    if (tab === 'completadas') return retiros.filter((r) => r.estado === 'completado');
+    if (tab === 'problemas') return retiros.filter((r) => r.estado === 'problema');
+    return retiros.filter((r) => r.estado === 'pendiente');
+  }, [retiros, tab]);
 
   async function handleIniciarRuta() {
     if (!rutaHoy || !choferUid) return;
@@ -211,32 +208,9 @@ function EnRuta() {
   if (roleLoading || rutasLoading || retirosLoading || clientsLoading || subsLoading)
     return <Loading />;
 
-  // if (diaNombre === 'Domingo') {
-  //   return (
-  //     <Box sx={{ p: 2, textAlign: 'center' }}>
-  //       <Typography variant="h6" color="text.secondary">
-  //         Hoy es domingo. No hay ruta programada.
-  //       </Typography>
-  //     </Box>
-  //   );
-  // }
-
   if (!rutaHoy) {
     return (
       <Box sx={{ p: 2 }}>
-        <Box sx={{ p: 1.5, bgcolor: '#fff3cd', borderRadius: 1, border: '1px solid #ffc107' }}>
-          <Typography variant="caption" color="text.secondary">
-            🔧 DEBUG: Override date for testing
-          </Typography>
-          <TextField
-            type="date"
-            size="small"
-            value={debugDateStr}
-            onChange={handleDebugDateChange}
-            sx={{ mt: 0.5, '& input': { fontSize: '0.875rem' } }}
-          />
-        </Box>
-
         <Alert severity="info">
           No tienes una ruta asignada para hoy ({diaNombre}). Contacta al administrador.
         </Alert>
@@ -247,27 +221,14 @@ function EnRuta() {
   return (
     <>
       <Stack spacing={2}>
-        {/* Debug: Date picker for testing */}
-        <Box sx={{ p: 1.5, bgcolor: '#fff3cd', borderRadius: 1, border: '1px solid #ffc107' }}>
-          <Typography variant="caption" color="text.secondary">
-            🔧 DEBUG: Override date for testing
-          </Typography>
-          <TextField
-            type="date"
-            size="small"
-            value={debugDateStr}
-            onChange={handleDebugDateChange}
-            sx={{ mt: 0.5, '& input': { fontSize: '0.875rem' } }}
-          />
-        </Box>
-
         <Stack direction="row" justifyContent="space-between" alignItems="center">
           <Box>
             <Typography variant="h6" fontWeight={600}>
               {diaNombre} - En Ruta
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              {getNow().toLocaleDateString('es-CL', {
+              {new Date().toLocaleDateString('es-CL', {
+                timeZone: CHILE_TZ,
                 year: 'numeric',
                 month: 'long',
                 day: 'numeric',
@@ -303,21 +264,34 @@ function EnRuta() {
             </Button>
           </Box>
         ) : (
-          <Stack spacing={1.5}>
-            {retiros.map((retiro) => (
-              <ParadaCard
-                key={retiro.id}
-                retiro={retiro}
-                paymentInfo={clientPaymentMap.get(retiro.clienteId)}
-                onComplete={handleComplete}
-                onReportProblem={(id) => setReportRetiroId(id)}
-                onClick={setSelectedRetiro}
-              />
-            ))}
-          </Stack>
+          <>
+            <Tabs value={tab} onChange={(_, v) => setTab(v as RetiroTab)} variant="fullWidth">
+              <Tab label={`Pendientes (${pendientes})`} value="pendientes" />
+              <Tab label={`Realizadas (${completados})`} value="completadas" />
+              <Tab label={`Problemas (${problemas})`} value="problemas" />
+            </Tabs>
+
+            <Stack spacing={1.5}>
+              {retirosFiltered.length === 0 ? (
+                <Typography color="text.secondary" sx={{ py: 3, textAlign: 'center' }}>
+                  No hay paradas en esta categoría.
+                </Typography>
+              ) : (
+                retirosFiltered.map((retiro) => (
+                  <ParadaCard
+                    key={retiro.id}
+                    retiro={retiro}
+                    paymentInfo={clientPaymentMap.get(retiro.clienteId)}
+                    onComplete={handleComplete}
+                    onReportProblem={(id) => setReportRetiroId(id)}
+                    onClick={setSelectedRetiro}
+                  />
+                ))
+              )}
+            </Stack>
+          </>
         )}
 
-        {/* Pesaje form - only show when all retiros are resolved (none pending) */}
         {total > 0 && retiros.every((r) => r.estado !== 'pendiente') && !pesajeSaved && (
           <PesajeForm
             fecha={fecha}
