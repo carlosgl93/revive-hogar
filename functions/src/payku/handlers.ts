@@ -8,6 +8,13 @@ import { createPaykuClient } from './client';
 
 const corsHandler = cors({ origin: true });
 
+export function validateAmount(amount: unknown): string | null {
+  if (typeof amount !== 'number' || !isFinite(amount) || amount <= 0) {
+    return 'amount must be a positive number';
+  }
+  return null;
+}
+
 function buildPaykuClient() {
   const pub = process.env.PAYKU_PUBLIC_TOKEN;
   const priv = process.env.PAYKU_PRIVATE_TOKEN;
@@ -502,6 +509,12 @@ export const createPaykuTransactionForClient = onRequest(
       const { clienteId, email, amount, subject } = req.body;
       if (!clienteId || !amount) {
         res.status(400).json({ error: 'clienteId and amount are required' });
+        return;
+      }
+
+      const amountError = validateAmount(amount);
+      if (amountError) {
+        res.status(400).json({ error: amountError });
         return;
       }
 
