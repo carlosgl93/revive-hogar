@@ -734,56 +734,49 @@ export const syncHistoricPayments = onRequest(
         };
       }
 
-      // 3. Batch write to Firestore
+      // 3. Write to Firestore atomically per document
       const collection = db.collection('userHistoricPayments');
       let customersUpdated = 0;
 
-      const entries = Array.from(grouped.entries());
-      // Process in batches of 500 (Firestore batch limit)
-      for (let i = 0; i < entries.length; i += 500) {
-        const batch = db.batch();
-        const chunk = entries.slice(i, i + 500);
-
-        for (const [docId, data] of chunk) {
+      await Promise.all(
+        Array.from(grouped.entries()).map(async ([docId, data]) => {
           const docRef = collection.doc(docId);
 
-          // Read existing doc to merge payments
-          const existing = await docRef.get();
-          const existingData = existing.exists ? existing.data() : null;
+          await db.runTransaction(async (tx) => {
+            const existing = await tx.get(docRef);
+            const existingData = existing.exists ? existing.data() : null;
 
-          const mergedPayments: Record<string, { createdAt: string; [k: string]: unknown }> = {
-            ...((existingData?.payments as Record<string, { createdAt: string }>) || {}),
-            ...data.payments,
-          };
+            const mergedPayments: Record<string, { createdAt: string; [k: string]: unknown }> = {
+              ...((existingData?.payments as Record<string, { createdAt: string }>) || {}),
+              ...data.payments,
+            };
 
-          // Compute lastPaymentDate from all payments
-          const allDates = Object.values(mergedPayments).map(
-            (p: { createdAt: string }) => p.createdAt,
-          );
-          allDates.sort();
-          const lastPaymentDate = allDates[allDates.length - 1] || '';
+            const allDates = Object.values(mergedPayments).map(
+              (p: { createdAt: string }) => p.createdAt,
+            );
+            allDates.sort();
+            const lastPaymentDate = allDates[allDates.length - 1] || '';
 
-          const existingSyncedYears: number[] = existingData?.syncedYears || [];
-          const syncedYears = existingSyncedYears.includes(year)
-            ? existingSyncedYears
-            : [...existingSyncedYears, year].sort();
+            const existingSyncedYears: number[] = existingData?.syncedYears || [];
+            const syncedYears = existingSyncedYears.includes(year)
+              ? existingSyncedYears
+              : [...existingSyncedYears, year].sort();
 
-          batch.set(docRef, {
-            direccion: data.direccion,
-            email: data.email,
-            fullName: data.fullName,
-            phone: data.phone,
-            lastPaymentDate,
-            totalPayments: Object.keys(mergedPayments).length,
-            syncedYears,
-            payments: mergedPayments,
+            tx.set(docRef, {
+              direccion: data.direccion,
+              email: data.email,
+              fullName: data.fullName,
+              phone: data.phone,
+              lastPaymentDate,
+              totalPayments: Object.keys(mergedPayments).length,
+              syncedYears,
+              payments: mergedPayments,
+            });
           });
 
           customersUpdated++;
-        }
-
-        await batch.commit();
-      }
+        }),
+      );
 
       console.log(
         `syncHistoricPayments: year=${year}, transactions=${allTransactions.length}, ` +
