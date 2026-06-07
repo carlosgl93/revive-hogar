@@ -44,7 +44,7 @@ function buildQueryString(params: Record<string, string | number | boolean | und
 // ─── Existing: List Subscriptions (V2) ───
 
 export const listPaykuSubscriptions = onRequest(
-  {},
+  { invoker: 'public' },
   (req, res) => {
     corsHandler(req, res, async () => {
       try {
@@ -57,6 +57,7 @@ export const listPaykuSubscriptions = onRequest(
       const client = buildPaykuClient();
 
       try {
+        // /sususcription is the correct Payku API path (intentional double-su)
         const response = await client.get('/sususcription');
         res.json(response.data);
       } catch (error) {
@@ -70,7 +71,7 @@ export const listPaykuSubscriptions = onRequest(
 // ─── Existing: Get Subscription Status ───
 
 export const getPaykuSubscriptionStatus = onRequest(
-  {},
+  { invoker: 'public' },
   (req, res) => {
     corsHandler(req, res, async () => {
       try {
@@ -89,6 +90,7 @@ export const getPaykuSubscriptionStatus = onRequest(
       const client = buildPaykuClient();
 
       try {
+        // /sususcription is the correct Payku API path (intentional double-su)
         const response = await client.get(`/sususcription/${subscriptionId}`);
         res.json(response.data);
       } catch (error) {
@@ -102,7 +104,7 @@ export const getPaykuSubscriptionStatus = onRequest(
 // ─── Clients: List (paginated) ───
 
 export const listPaykuClients = onRequest(
-  {},
+  { invoker: 'public' },
   (req, res) => {
     corsHandler(req, res, async () => {
       if (req.method !== 'GET') {
@@ -139,7 +141,7 @@ export const listPaykuClients = onRequest(
 // ─── Clients: Get by ID or email ───
 
 export const getPaykuClient = onRequest(
-  {},
+  { invoker: 'public' },
   (req, res) => {
     corsHandler(req, res, async () => {
       if (req.method !== 'GET') {
@@ -175,7 +177,7 @@ export const getPaykuClient = onRequest(
 // ─── Clients: Create ───
 
 export const createPaykuClientFn = onRequest(
-  {},
+  { invoker: 'public' },
   (req, res) => {
     corsHandler(req, res, async () => {
       if (req.method !== 'POST') {
@@ -210,7 +212,7 @@ export const createPaykuClientFn = onRequest(
 // ─── Clients: Update ───
 
 export const updatePaykuClient = onRequest(
-  {},
+  { invoker: 'public' },
   (req, res) => {
     corsHandler(req, res, async () => {
       if (req.method !== 'PUT') {
@@ -246,7 +248,7 @@ export const updatePaykuClient = onRequest(
 // ─── Clients: Delete ───
 
 export const deletePaykuClient = onRequest(
-  {},
+  { invoker: 'public' },
   (req, res) => {
     corsHandler(req, res, async () => {
       if (req.method !== 'DELETE') {
@@ -282,7 +284,7 @@ export const deletePaykuClient = onRequest(
 // ─── Subscriptions: List V3 (with date + status filters + pagination) ───
 
 export const listPaykuSubscriptionsV3 = onRequest(
-  {},
+  { invoker: 'public' },
   (req, res) => {
     corsHandler(req, res, async () => {
       if (req.method !== 'GET') {
@@ -311,6 +313,7 @@ export const listPaykuSubscriptionsV3 = onRequest(
       });
 
       try {
+        // /sususcriptionv3 is the correct Payku API path (intentional double-su)
         const response = await client.get(`/sususcriptionv3${qs}`);
         res.json(response.data);
       } catch (error) {
@@ -324,7 +327,7 @@ export const listPaykuSubscriptionsV3 = onRequest(
 // ─── Subscriptions: Create ───
 
 export const createPaykuSubscription = onRequest(
-  {},
+  { invoker: 'public' },
   (req, res) => {
     corsHandler(req, res, async () => {
       if (req.method !== 'POST') {
@@ -347,6 +350,7 @@ export const createPaykuSubscription = onRequest(
       const client = buildPaykuClient();
 
       try {
+        // /sususcription is the correct Payku API path (intentional double-su)
         const response = await client.post('/sususcription', {
           plan,
           client: clientId,
@@ -363,7 +367,7 @@ export const createPaykuSubscription = onRequest(
 // ─── Subscriptions: Get single ───
 
 export const getPaykuSubscription = onRequest(
-  {},
+  { invoker: 'public' },
   (req, res) => {
     corsHandler(req, res, async () => {
       if (req.method !== 'GET') {
@@ -386,6 +390,7 @@ export const getPaykuSubscription = onRequest(
       const client = buildPaykuClient();
 
       try {
+        // /sususcription is the correct Payku API path (intentional double-su)
         const response = await client.get(`/sususcription/${subscriptionId}`);
         res.json(response.data);
       } catch (error) {
@@ -399,7 +404,7 @@ export const getPaykuSubscription = onRequest(
 // ─── Subscriptions: Delete ───
 
 export const deletePaykuSubscription = onRequest(
-  {},
+  { invoker: 'public' },
   (req, res) => {
     corsHandler(req, res, async () => {
       if (req.method !== 'DELETE') {
@@ -422,6 +427,7 @@ export const deletePaykuSubscription = onRequest(
       const client = buildPaykuClient();
 
       try {
+        // /sususcription is the correct Payku API path (intentional double-su)
         const response = await client.delete(`/sususcription/${subscriptionId}`);
         res.json(response.data);
       } catch (error) {
@@ -435,7 +441,7 @@ export const deletePaykuSubscription = onRequest(
 // ─── Card: Affiliate new card to subscription ───
 
 export const affiliatePaykuCard = onRequest(
-  {},
+  { invoker: 'public' },
   (req, res) => {
     corsHandler(req, res, async () => {
       if (req.method !== 'POST') {
@@ -473,7 +479,7 @@ export const affiliatePaykuCard = onRequest(
 // ─── Transactions: Create a one-time payment link for a client ───
 
 export const createPaykuTransactionForClient = onRequest(
-  {},
+  { invoker: 'public' },
   (req, res) => {
     corsHandler(req, res, async () => {
       if (req.method !== 'POST') {
@@ -545,6 +551,7 @@ export const createPaykuTransactionForClient = onRequest(
           orderId,
           paykuId: response.data.id ?? null,
           paykuUrl: response.data.url ?? null,
+          verificationKey: response.data.verification_key ?? null, // store for webhook comparison
           createdAt: new Date().toISOString(),
         });
 
@@ -591,7 +598,7 @@ function hashDireccion(direccion: string): string {
 }
 
 export const syncHistoricPayments = onRequest(
-  { timeoutSeconds: 540 },
+  { timeoutSeconds: 540, invoker: 'public' },
   (req, res) => {
     corsHandler(req, res, async () => {
       if (req.method !== 'POST') {

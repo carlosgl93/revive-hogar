@@ -37,7 +37,7 @@ function addMonths(date: Date, months: number): Date {
 // ─── Webhook: Subscription Activation ───
 // Payku POSTs { id, status } when a subscription becomes active
 
-export const webhookSubscriptionActivation = onRequest(async (req, res) => {
+export const webhookSubscriptionActivation = onRequest({ invoker: 'public' }, async (req, res) => {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' });
     return;
@@ -106,7 +106,7 @@ export const webhookSubscriptionActivation = onRequest(async (req, res) => {
 // ─── Webhook: Payment Charge ───
 // Payku POSTs { transaction_id, verification_key, order, status, subscriptions: { id, client } }
 
-export const webhookPaymentCharge = onRequest(async (req, res) => {
+export const webhookPaymentCharge = onRequest({ invoker: 'public' }, async (req, res) => {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' });
     return;
@@ -135,6 +135,28 @@ export const webhookPaymentCharge = onRequest(async (req, res) => {
     if (!existingLog.empty) {
       res.status(200).json({ received: true, deduplicated: true });
       return;
+    }
+
+    // Verify verification_key for one-time payments (subscription payments have no stored key)
+    if (payload.verification_key) {
+      const storedLogSnap = await db
+        .collection('transactionLogs')
+        .where('paykuId', '==', String(payload.transaction_id))
+        .where('type', '==', 'transaction_created')
+        .limit(1)
+        .get();
+
+      if (!storedLogSnap.empty) {
+        const storedKey: string | undefined = storedLogSnap.docs[0].data().verificationKey;
+        if (storedKey && storedKey !== payload.verification_key) {
+          console.warn('webhookPaymentCharge: verification_key mismatch, rejecting', {
+            transaction_id: payload.transaction_id,
+          });
+          res.status(401).json({ error: 'Invalid verification key' });
+          return;
+        }
+      }
+      // No stored log = subscription payment, allow through
     }
 
     // Find client by paykuSubscriptionId
