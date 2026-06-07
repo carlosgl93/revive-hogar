@@ -146,26 +146,28 @@ export const webhookPaymentCharge = onRequest({ invoker: 'public' }, async (req,
       return;
     }
 
-    // Verify verification_key for one-time payments
-    // Subscription auto-charges have no stored log, so they fall through
-    const storedLogSnap = await db
-      .collection('transactionLogs')
-      .where('paykuId', '==', String(payload.transaction_id))
-      .where('type', '==', 'transaction_created')
-      .limit(1)
-      .get();
+    // One-time payment transactions store verificationKey at creation.
+    // Subscription auto-charges (always have subscriptions.id) skip this check.
+    const isOneTimePayment = !payload.subscriptions?.id;
+    if (isOneTimePayment) {
+      const storedLogSnap = await db
+        .collection('transactionLogs')
+        .where('paykuId', '==', String(payload.transaction_id))
+        .where('type', '==', 'transaction_created')
+        .limit(1)
+        .get();
 
-    if (!storedLogSnap.empty) {
-      const storedKey: string | undefined = storedLogSnap.docs[0].data().verificationKey;
-      if (shouldRejectWebhook(storedKey, payload.verification_key)) {
-        console.warn('webhookPaymentCharge: verification_key mismatch, rejecting', {
-          transaction_id: payload.transaction_id,
-        });
-        res.status(401).json({ error: 'Invalid verification key' });
-        return;
+      if (!storedLogSnap.empty) {
+        const storedKey: string | undefined = storedLogSnap.docs[0].data().verificationKey;
+        if (shouldRejectWebhook(storedKey, payload.verification_key)) {
+          console.warn('webhookPaymentCharge: verification_key mismatch, rejecting', {
+            transaction_id: payload.transaction_id,
+          });
+          res.status(401).json({ error: 'Invalid verification key' });
+          return;
+        }
       }
     }
-    // No stored log = subscription payment, allow through
 
     // Find client by paykuSubscriptionId
     let snapshot = await db

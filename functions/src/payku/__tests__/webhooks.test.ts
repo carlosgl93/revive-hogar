@@ -25,4 +25,8 @@ describe('webhook verification_key check', () => {
   it('allows through when stored key is empty string (legacy)', () => {
     expect(shouldRejectWebhook('', 'anykey')).toBe(false);
   });
+
+  it('allows through when both stored and received are undefined', () => {
+    expect(shouldRejectWebhook(undefined, undefined)).toBe(false);
+  });
 });

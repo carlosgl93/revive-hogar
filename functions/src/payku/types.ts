@@ -157,7 +157,7 @@ export interface PaykuSubscriptionWebhook {
 
 export interface PaykuPaymentWebhook {
   transaction_id: number;
-  verification_key: string;
+  verification_key?: string;
   order: number;
   status: string;
   subscriptions: {
