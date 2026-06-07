@@ -41,7 +41,7 @@ interface ImportResult {
 }
 
 export const importFromSheets = onRequest(
-  {},
+  { invoker: 'public' },
   (req, res) => {
     corsHandler(req, res, async () => {
       try {
@@ -71,29 +71,35 @@ export const importFromSheets = onRequest(
         // Collect active clients grouped by day to build rutas later
         const clientesPorDia: Record<string, Array<{ id: string; nombre: string; direccion: string; comuna: string; telefono: string }>> = {};
 
+        // Phase 1: transform all rows synchronously, collect valid clients
+        type ValidRow = {
+          cliente: NonNullable<ReturnType<typeof transformRow>['cliente']>;
+        };
+
+        const validRows: ValidRow[] = [];
         for (let i = 0; i < dataRows.length; i++) {
           const { cliente, error } = transformRow(dataRows[i], headerIndex, i + 1);
+          if (error) { result.errors.push(error); continue; }
+          if (!cliente) { result.skipped++; result.emptyRows++; console.log(`[import] Row ${i + 2} is empty, skipping`); continue; }
+          validRows.push({ cliente });
+        }
 
-          if (error) {
-            result.errors.push(error);
-            continue;
-          }
+        // Phase 2: run all existence queries in parallel
+        const queryResults = await Promise.all(
+          validRows.map(({ cliente }) =>
+            db
+              .collection('clientes')
+              .where('correo', '==', cliente.correo)
+              .where('direccion', '==', cliente.direccion)
+              .limit(1)
+              .get(),
+          ),
+        );
 
-          if (!cliente) {
-            result.skipped++;
-            result.emptyRows++;
-            console.log(`[import] Row ${i + 2} is empty, skipping`);
-            continue;
-          }
-
-          // Upsert by correo + direccion (allow same email with different address)
-          const existingQuery = db
-            .collection('clientes')
-            .where('correo', '==', cliente.correo)
-            .where('direccion', '==', cliente.direccion)
-            .limit(1);
-
-          const existing = await existingQuery.get();
+        // Phase 3: write results sequentially
+        for (let i = 0; i < validRows.length; i++) {
+          const { cliente } = validRows[i];
+          const existing = queryResults[i];
 
           let clienteId: string;
           if (!existing.empty) {
