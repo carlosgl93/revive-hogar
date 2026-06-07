@@ -493,6 +493,12 @@ export const createPaykuTransactionForClient = onRequest(
         return;
       }
 
+      const webhookNotifyUrl = process.env.PAYKU_WEBHOOK_NOTIFY_URL;
+      if (!webhookNotifyUrl) {
+        res.status(500).json({ error: 'PAYKU_WEBHOOK_NOTIFY_URL is not configured' });
+        return;
+      }
+
       const { clienteId, email, amount, subject } = req.body;
       if (!clienteId || !amount) {
         res.status(400).json({ error: 'clienteId and amount are required' });
@@ -527,7 +533,7 @@ export const createPaykuTransactionForClient = onRequest(
           currency: 'CLP',
           payment: 99,
           urlreturn: 'https://revivehogar.cl/pago-completado',
-          urlnotify: 'https://webhookpaymentcharge-gqzgwmmqkq-uc.a.run.app',
+          urlnotify: webhookNotifyUrl,
           additional_parameters: {
             clienteId,
           },
