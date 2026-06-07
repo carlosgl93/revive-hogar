@@ -160,7 +160,7 @@ export interface PaykuPaymentWebhook {
   verification_key?: string;
   order: number;
   status: string;
-  subscriptions: {
+  subscriptions?: {
     id: string;
     client: string;
   };

@@ -568,7 +568,7 @@ export const createPaykuTransactionForClient = onRequest(
           email: clientEmail,
           amount,
           orderId,
-          paykuId: response.data.id ?? null,
+          paykuId: response.data.id != null ? String(response.data.id) : null,
           paykuUrl: response.data.url ?? null,
           verificationKey: response.data.verification_key ?? null, // store for webhook comparison
           createdAt: new Date().toISOString(),

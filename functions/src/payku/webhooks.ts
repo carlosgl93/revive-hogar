@@ -122,12 +122,6 @@ export const webhookPaymentCharge = onRequest({ invoker: 'public' }, async (req,
   }
 
   const payload = req.body as PaykuPaymentWebhook;
-
-  if (!payload.subscriptions?.id) {
-    res.status(400).json({ error: 'Missing subscription id' });
-    return;
-  }
-
   const db = admin.firestore();
   const now = new Date();
   const monthKey = getSpanishMonthKey(now);
@@ -146,10 +140,10 @@ export const webhookPaymentCharge = onRequest({ invoker: 'public' }, async (req,
       return;
     }
 
-    // One-time payment transactions store verificationKey at creation.
-    // Subscription auto-charges (always have subscriptions.id) skip this check.
     const isOneTimePayment = !payload.subscriptions?.id;
+
     if (isOneTimePayment) {
+      // One-time payment: verify verification_key against stored value
       const storedLogSnap = await db
         .collection('transactionLogs')
         .where('paykuId', '==', String(payload.transaction_id))
@@ -167,20 +161,33 @@ export const webhookPaymentCharge = onRequest({ invoker: 'public' }, async (req,
           return;
         }
       }
+
+      // Log and return for one-time payments (no subscription client to update)
+      await db.collection('webhookLogs').add({
+        type: 'payment_charge',
+        subscriptionId: null,
+        clientId: null,
+        transactionId: payload.transaction_id,
+        status: payload.status,
+        order: payload.order,
+        matchedBy: 'one_time_payment',
+        receivedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      res.status(200).json({ received: true });
+      return;
     }
 
-    // Find client by paykuSubscriptionId
+    // Subscription payment: find client by paykuSubscriptionId
     let snapshot = await db
       .collection('clientes')
-      .where('paykuSubscriptionId', '==', payload.subscriptions.id)
+      .where('paykuSubscriptionId', '==', payload.subscriptions!.id)
       .limit(1)
       .get();
 
     // Fallback: try matching by Payku client email
-    if (snapshot.empty && payload.subscriptions.client) {
-      // payload.subscriptions.client could be a Payku client ID or email
-      const clientIdentifier = payload.subscriptions.client;
-      // Try as email first (contains @)
+    if (snapshot.empty && payload.subscriptions!.client) {
+      const clientIdentifier = payload.subscriptions!.client;
       if (clientIdentifier.includes('@')) {
         snapshot = await db
           .collection('clientes')
@@ -189,39 +196,35 @@ export const webhookPaymentCharge = onRequest({ invoker: 'public' }, async (req,
           .get();
       }
 
-      // Auto-link the subscription ID so future lookups are direct
       if (!snapshot.empty) {
-        await snapshot.docs[0].ref.update({ paykuSubscriptionId: payload.subscriptions.id });
+        await snapshot.docs[0].ref.update({ paykuSubscriptionId: payload.subscriptions!.id });
       }
     }
 
     const matchedBy = !snapshot.empty
-      ? (snapshot.docs[0].data().paykuSubscriptionId === payload.subscriptions.id ? 'subscriptionId' : 'email')
+      ? (snapshot.docs[0].data().paykuSubscriptionId === payload.subscriptions!.id ? 'subscriptionId' : 'email')
       : 'none';
 
     if (!snapshot.empty) {
       const clientDoc = snapshot.docs[0];
 
       if (payload.status === 'success') {
-        // Payment successful: mark month as 'ok', update cut date
         const nextCutDate = addMonths(now, 1);
         await clientDoc.ref.update({
           [`pagos.${monthKey}`]: 'ok',
           fechaCorte: nextCutDate.toISOString(),
         });
       } else {
-        // Payment failed: mark month as 'atrasado'
         await clientDoc.ref.update({
           [`pagos.${monthKey}`]: 'atrasado',
         });
       }
     }
 
-    // Log the webhook event
     await db.collection('webhookLogs').add({
       type: 'payment_charge',
-      subscriptionId: payload.subscriptions.id,
-      clientId: payload.subscriptions.client,
+      subscriptionId: payload.subscriptions!.id,
+      clientId: payload.subscriptions!.client,
       transactionId: payload.transaction_id,
       status: payload.status,
       order: payload.order,
