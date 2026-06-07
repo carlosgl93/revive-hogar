@@ -3,6 +3,15 @@ import { onRequest } from 'firebase-functions/v2/https';
 
 import { PaykuSubscriptionWebhook, PaykuPaymentWebhook } from './types';
 
+/** Returns true if the webhook should be rejected based on key mismatch. */
+export function shouldRejectWebhook(
+  storedKey: string | undefined,
+  receivedKey: string | undefined,
+): boolean {
+  if (!storedKey) return false; // no stored key = subscription payment, allow through
+  return storedKey !== receivedKey;
+}
+
 if (!admin.apps.length) {
   admin.initializeApp();
 }
@@ -137,27 +146,26 @@ export const webhookPaymentCharge = onRequest({ invoker: 'public' }, async (req,
       return;
     }
 
-    // Verify verification_key for one-time payments (subscription payments have no stored key)
-    if (payload.verification_key) {
-      const storedLogSnap = await db
-        .collection('transactionLogs')
-        .where('paykuId', '==', String(payload.transaction_id))
-        .where('type', '==', 'transaction_created')
-        .limit(1)
-        .get();
+    // Verify verification_key for one-time payments
+    // Subscription auto-charges have no stored log, so they fall through
+    const storedLogSnap = await db
+      .collection('transactionLogs')
+      .where('paykuId', '==', String(payload.transaction_id))
+      .where('type', '==', 'transaction_created')
+      .limit(1)
+      .get();
 
-      if (!storedLogSnap.empty) {
-        const storedKey: string | undefined = storedLogSnap.docs[0].data().verificationKey;
-        if (storedKey && storedKey !== payload.verification_key) {
-          console.warn('webhookPaymentCharge: verification_key mismatch, rejecting', {
-            transaction_id: payload.transaction_id,
-          });
-          res.status(401).json({ error: 'Invalid verification key' });
-          return;
-        }
+    if (!storedLogSnap.empty) {
+      const storedKey: string | undefined = storedLogSnap.docs[0].data().verificationKey;
+      if (shouldRejectWebhook(storedKey, payload.verification_key)) {
+        console.warn('webhookPaymentCharge: verification_key mismatch, rejecting', {
+          transaction_id: payload.transaction_id,
+        });
+        res.status(401).json({ error: 'Invalid verification key' });
+        return;
       }
-      // No stored log = subscription payment, allow through
     }
+    // No stored log = subscription payment, allow through
 
     // Find client by paykuSubscriptionId
     let snapshot = await db
