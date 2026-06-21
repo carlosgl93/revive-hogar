@@ -151,7 +151,7 @@ export async function matchCliente(
 - `+50` si `cliente.rut === parse.rut` (campo nuevo en `Cliente`)
 - `+30` si `cliente.montoPendiente === parse.monto` exacto
 - `+20` si es el único candidato activo con `montoPendiente > 0`
-- `+10` si `cliente.nombre.toLowerCase()` está fuzzy-contained en `parse.comentario` (Levenshtein ≤ 2)
+- `+10` si `cliente.nombre.toLowerCase()` está fuzzy-contained en `parse.comentario` (Levenshtein ≤ 2, solo si `cliente.nombre.length >= 5` para evitar false positives en nombres cortos)
 - `-30` si hay 2+ candidatos con score > 60 (ambigüedad forzada)
 
 **Decisión**:
@@ -179,18 +179,19 @@ export async function applyTransferencia(
 
 **Lógica de distribución** (asume `cliente.monto > 0`):
 
-1. Calcular `mesesCubiertos = round(parse.monto / cliente.monto)`.
-2. Si `parse.comentario` matchea patrón `mes_1[,]? mes_2[,]? ...` → override con esos meses en orden (parsing via `SPANISH_MONTHS` map).
-3. Ordenar meses aplicables por prioridad: `pendiente > atrasado > '' > 'ok'`. Top N.
-4. Para cada mes: `pagos[mes] = 'ok'`, `montoPendiente -= cliente.monto`.
-5. `fechaCorte = addMonths(fechaCorte, mesesCubiertos)`.
-6. **Write en transacción atómica** (`db.runTransaction`):
+1. Calcular ratio = `parse.monto / cliente.monto`. Si `|ratio - round(ratio)| > 0.05` (5% tolerance, ej. comisión bancaria) → throw con `reason: 'partial_amount'`, caller routea a inbox. No auto-apply.
+2. `mesesCubiertos = round(ratio)`. Si `=== 0` → throw con `reason: 'partial_amount'`.
+3. Si `parse.comentario` matchea patrón `mes_1[,]? mes_2[,]? ...` y la cantidad de meses matchea `mesesCubiertos` → override con esos meses en orden (parsing via `SPANISH_MONTHS` map). Si la cantidad no matchea → ignorar el override y usar paso 4.
+4. Ordenar meses aplicables por prioridad: `atrasado > pendiente > '' > 'ok'`. Top N.
+5. Para cada mes: `pagos[mes] = 'ok'`, `montoPendiente -= cliente.monto`.
+6. `fechaCorte = addMonths(fechaCorte, mesesCubiertos)`. Si `fechaCorte` no existe, inicializar a hoy + N meses.
+7. **Write en transacción atómica** (`db.runTransaction`):
    - Read cliente
    - Compute diff
    - Update `clientes/{id}` (pagos, montoPendiente, fechaCorte)
    - Write `transferenciaLog/{autoId}` con emailId + parse + score
    - Si falla cualquiera → rollback, throw
-7. Return `ApplyResult` con meses aplicados y monto residual.
+8. Return `ApplyResult` con meses aplicados y monto residual.
 
 **Edge cases**:
 - `cliente.monto === 0` o undefined → throw, caller routea a inbox con `reason: 'no_monthly_amount'`
@@ -314,7 +315,8 @@ export const transferenciasInbound = onSchedule(
 
 **Gmail API calls**:
 - `listUnprocessedEmails`: `users.messages.list({ userId: 'me', q: 'label:ReviveHogar/Transferencias -label:Procesadas' })`
-- `markEmailProcessed`: `users.messages.modify({ id, removeLabelIds: ['Label_ReviveHogar/Transferencias'], addLabelIds: ['Label_Procesadas'] })`
+- `markEmailProcessed`: `users.messages.modify({ id, removeLabelIds: [labelIdTransferencias], addLabelIds: [labelIdProcesadas] })` — resolver label names → IDs via `users.labels.list()` al startup de la función y cachear en memoria (los IDs no cambian)
+- Constantes: `LABEL_TRANSFERENCIAS = 'ReviveHogar/Transferencias'`, `LABEL_PROCESADAS = 'ReviveHogar/Procesadas'`
 
 ## Data model
 
