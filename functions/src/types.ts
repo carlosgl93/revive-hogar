@@ -28,4 +28,5 @@ export interface Cliente {
   fechaCorte?: string;
   notas?: string;
   montoPendiente?: number;
+  rut?: string;  // RUT format: "12.345.678-9" or "12345678-9"
 }

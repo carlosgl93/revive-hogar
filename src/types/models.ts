@@ -41,6 +41,7 @@ export interface Cliente {
   notas?: string;
   pagos: Record<string, PaymentStatus>;
   montoPendiente?: number;
+  rut?: string;  // RUT format: "12.345.678-9" or "12345678-9"
 }
 
 // ── Weighing records (pesaje) ──────────────────────────────────────────
