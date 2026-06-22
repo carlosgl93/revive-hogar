@@ -75,6 +75,8 @@ export function transformRow(
     };
   }
 
+  const rut = get('rut');
+
   // Build pagos from month columns
   const pagos: Record<string, PaymentStatus> = {};
   for (const [header, idx] of Object.entries(headerIndex)) {
@@ -96,6 +98,7 @@ export function transformRow(
     activo: true,
     pagos,
     montoPendiente: normalizeMonto(get('monto pendiente')),
+    rut: rut || undefined,
   };
 
   return { cliente, error: null, rowIndex };
