@@ -16,6 +16,22 @@
         { "fieldPath": "choferUid", "order": "ASCENDING" },
         { "fieldPath": "orden", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "clientes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "activo", "order": "ASCENDING" },
+        { "fieldPath": "montoPendiente", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "transferenciaLog",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "emailId", "order": "ASCENDING" },
+        { "fieldPath": "processedAt", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": [
