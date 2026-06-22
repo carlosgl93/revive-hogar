@@ -152,12 +152,80 @@ VITE_FIREBASE_FUNCTIONS_URL=http://127.0.0.1:5001/revive-hogar/us-central1
 
 ```env
 SHEETS_SHEET_NAME=Total consolidado
+
+# Transferencias auto-sync (Gmail API)
+GMAIL_CLIENT_ID=
+GMAIL_CLIENT_SECRET=
+GMAIL_REFRESH_TOKEN=
+
+# MiniMax M3 (LLM fallback for non-BICE banks)
+MINIMAX_API_KEY=
+
+TRANSFERENCIAS_BANCO_WHITELIST=bice.cl
 ```
 
 Secrets (via Firebase Secrets Manager):
 - `PAYKU_PUBLIC_TOKEN`
 - `PAYKU_PRIVATE_TOKEN`
 - `SHEETS_SPREADSHEET_ID`
+
+---
+
+## Transferencias auto-sync setup
+
+Required to enable automatic detection of bank transfer emails. See `docs/superpowers/specs/2026-06-21-transferencias-auto-sync-design.md` for the design.
+
+### 1. OAuth credentials (one-time)
+
+1. GCP Console → APIs & Services → Credentials → Create OAuth 2.0 Client ID
+   - Type: **Web application**
+   - Authorized redirect URI: `http://localhost:3000/oauth2callback`
+2. Copy the Client ID and Client Secret.
+
+### 2. Generate refresh token (one-time)
+
+```bash
+export GMAIL_CLIENT_ID="<from step 1>"
+export GMAIL_CLIENT_SECRET="<from step 1>"
+node scripts/get-gmail-refresh-token.cjs
+# Browser opens → log in as Rosario → grant permissions
+# Script prints GMAIL_REFRESH_TOKEN
+```
+
+### 3. Configure env vars
+
+Add to `functions/.env.revive-hogar` (gitignored):
+
+```
+GMAIL_CLIENT_ID=<from step 1>
+GMAIL_CLIENT_SECRET=<from step 1>
+GMAIL_REFRESH_TOKEN=<from step 2>
+MINIMAX_API_KEY=<from MiniMax dashboard>
+TRANSFERENCIAS_BANCO_WHITELIST=bice.cl
+```
+
+### 4. Gmail labels + filter (Rosario, 1 min)
+
+In Gmail UI:
+1. Create label `ReviveHogar/Transferencias` (Settings → Labels)
+2. Create label `ReviveHogar/Procesadas` (Settings → Labels)
+3. Settings → Filters → Create filter:
+   - From: `alertas@bice.cl` (or BICE's actual sender)
+   - Apply label `ReviveHogar/Transferencias`
+   - Skip Inbox
+   - Never mark as important
+
+### 5. Deploy
+
+```bash
+firebase deploy --only functions:transferenciasInbound,functions:transferenciasCleanup,functions:resolveTransferenciaInbox
+```
+
+### 6. Verify
+
+Send a test email matching the BICE format to Rosario's Gmail. Within 5 minutes, the cliente's `pagos[mes]` should be `'ok'` and `montoPendiente` decremented. Check `/admin/transferencias` for the audit entry.
+
+**Known limitation:** Processed emails stay in the `ReviveHogar/Transferencias` label instead of moving to `ReviveHogar/Procesadas` (GmailClient label mutation deferred to T19). Idempotency check on `transferenciaLog` prevents double-application.
 
 ---
 
