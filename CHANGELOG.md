@@ -1,5 +1,15 @@
 ### Releases
 
+## 2026-06-22 — Transferencias auto-sync
+
+- New Cloud Function `transferenciasInbound` (onSchedule, 5 min)
+- BICE regex parser + MiniMax M3 LLM fallback
+- Score-based auto-apply (≥95) + admin inbox for ambiguous matches
+- New collections: `transferenciaLog`, `transferenciasSinMatch`
+- New admin page: `/admin/transferencias`
+- New `rut` field on `Cliente` (used for matching)
+- See `docs/superpowers/specs/2026-06-21-transferencias-auto-sync-design.md`
+
 ## v3.0.0
 
 ###### _Mar 2, 2025_
