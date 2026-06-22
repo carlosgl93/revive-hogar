@@ -29,3 +29,5 @@ export { createUsuario, deleteUsuario } from './users/handlers';
 export { scheduledPaymentReminder } from './notifications/paymentReminder';
 
 export { transferenciasInbound } from './transferencias/handler';
+
+export { resolveTransferenciaInbox } from './transferencias/inboxActions';
