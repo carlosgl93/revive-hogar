@@ -27,3 +27,5 @@ export { scheduledSyncCurrentYear } from './payku/scheduled';
 export { createUsuario, deleteUsuario } from './users/handlers';
 
 export { scheduledPaymentReminder } from './notifications/paymentReminder';
+
+export { transferenciasInbound } from './transferencias/handler';
