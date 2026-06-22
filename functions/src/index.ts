@@ -31,3 +31,5 @@ export { scheduledPaymentReminder } from './notifications/paymentReminder';
 export { transferenciasInbound } from './transferencias/handler';
 
 export { resolveTransferenciaInbox } from './transferencias/inboxActions';
+
+export { transferenciasCleanup } from './transferencias/cleanup';
