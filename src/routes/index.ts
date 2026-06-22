@@ -1,5 +1,6 @@
 import HistoryIcon from '@mui/icons-material/History';
 import PaymentIcon from '@mui/icons-material/Payment';
+import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
 import PeopleIcon from '@mui/icons-material/People';
 import RouteIcon from '@mui/icons-material/Route';
 import ScaleIcon from '@mui/icons-material/Scale';
@@ -41,6 +42,12 @@ const adminNavItems: AdminNavItem[] = [
     path: '/admin/importar',
     title: 'Importar',
     icon: UploadIcon,
+    roles: ['admin'],
+  },
+  {
+    path: '/admin/transferencias',
+    title: 'Transferencias',
+    icon: AccountBalanceIcon,
     roles: ['admin'],
   },
 ];
