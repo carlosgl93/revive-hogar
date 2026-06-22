@@ -28,6 +28,7 @@ src/
     Pagos/          — main dashboard (KPIs, clients, subscriptions, Payku customers)
     HistorialPagos/ — historic payment reconciliation
     Importar/       — Google Sheets import
+    Transferencias/ — admin inbox + history (/admin/transferencias)
   types/
     models.ts       — Cliente, PaymentStatus, PlanType
     payku.ts        — Payku API response types
@@ -47,6 +48,14 @@ functions/src/
     client.ts       — Google Sheets reader (service account auth)
     handlers.ts     — importFromSheets ETL handler
     transform.ts    — sheet row → Cliente transformer
+  transferencias/          — email inbound for bank transfers
+    parser/                — bice.ts (regex) + llm.ts (M3 fallback)
+    matcher.ts             — score-based client matching
+    applier.ts             — apply match to Firestore (transactional)
+    gmail.ts               — Gmail API client (OAuth + label resolution)
+    handler.ts             — onSchedule orchestrator
+    inboxActions.ts        — admin callable to resolve inbox
+    cleanup.ts             — monthly cleanup of resolved entries
 ```
 
 ---
@@ -102,6 +111,35 @@ pagos: Record<string, "ok" | "pendiente" | "atrasado" | "">
 
 ---
 
+## Transferencias auto-sync
+
+`clientes.tipoPago === 'Transferencia'` is auto-detected from bank notification emails. See `docs/superpowers/specs/2026-06-21-transferencias-auto-sync-design.md` for the full design.
+
+**How it works:**
+- Cloud Function `transferenciasInbound` runs every 5 min (`onSchedule`)
+- Reads Rosario's Gmail via OAuth (refresh token in `functions/.env.revive-hogar`)
+- Gmail filter (configured in Gmail UI) labels bank emails as `ReviveHogar/Transferencias`
+- Parses BICE emails with regex; falls back to MiniMax M3 LLM for other banks
+- Score-based matching: ≥95 auto-applies; <95 routes to `transferenciasSinMatch` inbox
+- Applies in Firestore transaction: writes `pagos[mes]='ok'`, decrements `montoPendiente`, increments `fechaCorte`
+- Logs to `transferenciaLog` (audit trail) and `transferenciasSinMatch` (admin inbox)
+- Admin UI: `/admin/transferencias` (Pendientes + Historial tabs)
+
+**Setup required (one-time, by Carlos):**
+1. Create OAuth 2.0 client in GCP Console, run `node scripts/get-gmail-refresh-token.cjs`
+2. Add 3 env vars to `functions/.env.revive-hogar`: `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`, `GMAIL_REFRESH_TOKEN`, `MINIMAX_API_KEY`
+3. Rosario creates Gmail filter for `ReviveHogar/Transferencias` label
+4. Rosario configures bank notifications to forward to her Gmail
+
+**Out of scope (deferred):**
+- Multi-bank regex parsers (BICE only)
+- SMTP2GO inbound (rejected — no custom domain)
+- Notification to client "received your payment"
+- Direct bank API integration
+- Gmail label mutation (T19 follow-up — currently processed emails stay in Transferencias label; idempotency check prevents double-apply)
+
+---
+
 ## Making Changes
 
 ### Adding a new KPI to the dashboard
@@ -138,8 +176,10 @@ pagos: Record<string, "ok" | "pendiente" | "atrasado" | "">
 
 **Fix needed:** After webhook fires, if no client found by `paykuSubscriptionId`, try matching by `correo` from the Payku customer record.
 
-### 2. Firestore security rules are wide open
-**Current:** Any authenticated user can read/write everything.
+### 2. Firestore security rules are wide open (partially addressed for transferencias)
+**Current:** Any authenticated user can read/write most collections.
+
+**Partially fixed:** `transferenciaLog` (admin-read-only) and `transferenciasSinMatch` (admin-only) now use `callerRole() == 'admin'` from `firestore.rules`. Other collections (`clientes`, `userHistoricPayments`, etc.) still allow any authenticated user.
 
 **Needed:** Lock `clientes` and `userHistoricPayments` to admin role. Webhooks write via Admin SDK (bypasses rules) so that's fine.
 
